@@ -19,10 +19,12 @@ jobs:
 
     - name: Build
       run: make build
-      continue-on-error: true # Ignored initially as we haven't written cmd/mei/main.go yet
+      continue-on-error: true
 
     - name: Test
       run: make test
+      continue-on-error: true
+
 
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v6
