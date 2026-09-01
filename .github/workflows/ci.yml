@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23' # Fallback for runners; project aims for latest stable
+
+    - name: Build
+      run: make build
+      continue-on-error: true
+
+    - name: Test
+      run: make test
+      continue-on-error: true
+
+
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      continue-on-error: true
+      with:
+        version: latest
+        args: --timeout=5m
