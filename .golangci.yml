@@ -1,32 +1,24 @@
-linters-settings:
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-  gocyclo:
-    min-complexity: 15
-  gocognit:
-    min-complexity: 30
-  goconst:
-    min-len: 3
-    min-occurrences: 3
+version: "2"
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
+    - misspell
     - staticcheck
     - unused
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+
+formatters:
+  enable:
     - gofmt
     - goimports
-    - misspell
 
 run:
-  timeout: 5m
   tests: true
-
-issues:
-  exclude-use-default: false

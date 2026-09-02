@@ -7,7 +7,11 @@ First off, thank you for considering contributing to meiosis! Contributions are 
 1. **Ensure you have Go installed** (preferably the latest stable version, e.g., 1.25+).
 2. **Fork the repository** on GitHub.
 3. **Clone your fork locally**: `git clone https://github.com/YOUR_USERNAME/meiosis.git`
-4. **Install dependencies** and run tests to ensure everything is working:
+4. **Install Git Hooks** to enforce commit message standards locally:
+   ```bash
+   ./scripts/install-hooks.sh
+   ```
+5. **Install dependencies** and run tests to ensure everything is working:
    ```bash
    make test
    make lint
@@ -26,7 +30,7 @@ First off, thank you for considering contributing to meiosis! Contributions are 
 1. **Create a branch** for your feature or bugfix:
    `git checkout -b feature/your-feature-name`
 2. **Make your changes**. We recommend a step-by-step approach. Small, focused PRs are much easier to review than massive rewrites.
-3. **Commit your changes**. Use descriptive commit messages following the Conventional Commits specification.
+3. **Commit your changes**. Use descriptive commit messages strictly following the [Conventional Commits](https://www.conventionalcommits.org/) specification. The local hook you installed earlier will automatically check and enforce this before allowing the commit.
 4. **Push your branch**: `git push origin feature/your-feature-name`
 5. **Open a Pull Request** against the `main` branch. Ensure you fill out the provided PR template.
 
