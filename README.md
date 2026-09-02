@@ -151,7 +151,7 @@ No bindings to write.
 
 **Design stage. There is no working binary yet.**
 
-The specification and requirements are written and reviewable; implementation
+The [format specification](spec/v1/README.md) and requirements are written and reviewable; implementation
 starts at M0. If you are here to try it, come back after M1 — that is the first
 milestone that does anything useful. If you are here to argue with the design,
 now is exactly the right time.
@@ -202,7 +202,8 @@ now.
 - **Apache-2.0**, chosen for the patent grant.
 - **DCO sign-off** (`git commit -s`). No CLA — contributor volume is worth more
   to this project than the option to relicense.
-- The format specification in `spec/v1` is versioned independently of the
+- **Conventional Commits:** We strictly enforce conventional commits via local Git hooks. Run `./scripts/install-hooks.sh` immediately after cloning.
+- The format specification in [`spec/v1`](spec/v1/README.md) is versioned independently of the
   server and has its own compatibility policy. The server is the reference
   implementation; the spec is the thing we hope outlives it.
 - A language-agnostic conformance suite lives in `spec/conformance/` so other
