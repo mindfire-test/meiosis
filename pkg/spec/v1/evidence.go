@@ -9,15 +9,15 @@ import (
 type EvidenceKind string
 
 const (
-	EvidenceKindTestRun       EvidenceKind = "test-run"
-	EvidenceKindCoverage      EvidenceKind = "coverage"
-	EvidenceKindTypeCheck     EvidenceKind = "type-check"
+	EvidenceKindTestRun        EvidenceKind = "test-run"
+	EvidenceKindCoverage       EvidenceKind = "coverage"
+	EvidenceKindTypeCheck      EvidenceKind = "type-check"
 	EvidenceKindStaticAnalysis EvidenceKind = "static-analysis"
-	EvidenceKindBenchmark     EvidenceKind = "benchmark"
-	EvidenceKindMutation      EvidenceKind = "mutation"
-	EvidenceKindSecurityScan  EvidenceKind = "security-scan"
-	EvidenceKindReplayMatch   EvidenceKind = "replay-match"
-	EvidenceKindHumanReview   EvidenceKind = "human-review"
+	EvidenceKindBenchmark      EvidenceKind = "benchmark"
+	EvidenceKindMutation       EvidenceKind = "mutation"
+	EvidenceKindSecurityScan   EvidenceKind = "security-scan"
+	EvidenceKindReplayMatch    EvidenceKind = "replay-match"
+	EvidenceKindHumanReview    EvidenceKind = "human-review"
 )
 
 type EvidenceOutcome string

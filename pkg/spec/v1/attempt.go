@@ -19,16 +19,16 @@ type ScopeViolation struct {
 }
 
 type Attempt struct {
-	ID              string            `json:"id"`
-	Intent          string            `json:"intent"`
-	Author          string            `json:"author"`
-	World           WorldHash         `json:"world"`
-	BaseWorld       WorldHash         `json:"base_world"`
-	GitCommit       string            `json:"git_commit,omitempty"`
-	ScopeViolations []ScopeViolation  `json:"scope_violations,omitempty"`
-	Status          AttemptStatus     `json:"status"`
-	CreatedAt       time.Time         `json:"created_at"`
-	Signature       string            `json:"signature"`
+	ID              string           `json:"id"`
+	Intent          string           `json:"intent"`
+	Author          string           `json:"author"`
+	World           WorldHash        `json:"world"`
+	BaseWorld       WorldHash        `json:"base_world"`
+	GitCommit       string           `json:"git_commit,omitempty"`
+	ScopeViolations []ScopeViolation `json:"scope_violations,omitempty"`
+	Status          AttemptStatus    `json:"status"`
+	CreatedAt       time.Time        `json:"created_at"`
+	Signature       string           `json:"signature"`
 }
 
 func (a Attempt) Validate() error {
