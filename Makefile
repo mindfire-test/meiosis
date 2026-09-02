@@ -5,7 +5,8 @@ all: lint test build
 
 build:
 	@echo "==> Building mei CLI..."
-	@go build -o bin/mei cmd/mei/main.go
+	@mkdir -p bin
+	@go build -o bin/mei ./cmd/mei
 
 test:
 	@echo "==> Running tests..."
