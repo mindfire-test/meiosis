@@ -30,8 +30,8 @@ func TestIssueProducesAValidSignedToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Issue() error = %v", err)
 	}
-	if err := token.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v", err)
+	if validationErr := token.Validate(); validationErr != nil {
+		t.Fatalf("Validate() error = %v", validationErr)
 	}
 	if token.Signature == "" {
 		t.Fatal("Issue() produced an unsigned token")
@@ -109,8 +109,8 @@ func TestVerifyRejectsTamperedToken(t *testing.T) {
 
 	tampered := token
 	tampered.Principal = "agent:someone-else"
-	if err := Verify(tampered, issuer.PublicKey, nil, token.IssuedAt); err != ErrTokenAltered {
-		t.Fatalf("Verify() error = %v, want ErrTokenAltered", err)
+	if verifyErr := Verify(tampered, issuer.PublicKey, nil, token.IssuedAt); verifyErr != ErrTokenAltered {
+		t.Fatalf("Verify() error = %v, want ErrTokenAltered", verifyErr)
 	}
 
 	wrongKey, err := crypto.GenerateKeyPair()
