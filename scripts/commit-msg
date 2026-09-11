@@ -3,7 +3,7 @@
 
 # Regex to validate the commit message
 # e.g., feat(module): add something new
-commit_regex='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-zA-Z0-9_-]+\))?: [a-zA-Z0-9].+$'
+commit_regex='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)\([a-zA-Z0-9_-]+\): [a-zA-Z0-9].+$'
 
 commit_msg_file=$1
 commit_msg=$(cat "$commit_msg_file")
