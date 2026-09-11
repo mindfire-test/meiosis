@@ -62,7 +62,7 @@ func New(config *viper.Viper) *cobra.Command {
 	bindFlag(config, flags, "verbose")
 
 	root.AddCommand(
-		newActionCommand("intent", "Manage intents", settings),
+		newIntentCommand(settings),
 		newActionCommand("attempt", "Manage attempts", settings),
 		newActionCommand("evidence", "Manage evidence", settings),
 		newActionCommand("status", "Show repository status", settings),

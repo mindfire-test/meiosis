@@ -61,6 +61,20 @@ func LoadEncodedKeyPair(privateKey, publicKey string) (KeyPair, error) {
 	return LoadKeyPair(private, public)
 }
 
+// LoadEncodedPublicKey loads a base64 or PEM-encoded (PKIX) Ed25519 public
+// key, e.g. one written out for a daemon that only needs to verify tokens
+// signed by an issuer it doesn't hold the private key for.
+func LoadEncodedPublicKey(publicKey string) (ed25519.PublicKey, error) {
+	data, err := decodePublicKey(publicKey)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("%w: public key must be %d bytes", ErrInvalidKey, ed25519.PublicKeySize)
+	}
+	return ed25519.PublicKey(data), nil
+}
+
 func (k KeyPair) PublicKeyBase64() string {
 	return base64.StdEncoding.EncodeToString(k.PublicKey)
 }
