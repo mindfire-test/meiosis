@@ -4,3 +4,4 @@ rules:
   scope-empty:
     - 2
     - never
+  body-max-line-length: [2, "always", 200]
