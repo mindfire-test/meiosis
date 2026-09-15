@@ -3,6 +3,7 @@ package mcp_test
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"testing"
 	"time"
@@ -90,6 +91,41 @@ func TestServerAcceptsToolCallsWithValidCapabilityToken(t *testing.T) {
 	result := resp["result"].(map[string]any)
 	if result["isError"] == true {
 		t.Fatalf("intent_create with a valid capability token failed: %v", result)
+	}
+}
+
+func TestServerAcceptsStringifiedCapabilityToken(t *testing.T) {
+	issuer, err := crypto.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair() error = %v", err)
+	}
+	token, err := identity.Issue(identity.IssueParams{
+		Principal: "agent:impl-3",
+		Intent:    "int_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		IssuedBy:  "human:lakin",
+		Scope:     specv1.Scope{Allow: []string{"**"}, Mode: specv1.ScopeModeEnforce},
+	}, issuer.PrivateKey)
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
+	}
+	encoded, err := identity.Encode(token)
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	// A client may serialize the token as a JSON string instead of embedding
+	// the object; the daemon must accept that form.
+	quoted, err := json.Marshal(string(encoded))
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	client := newEnforcingRPCClient(t, issuer)
+	client.call(t, 1, "initialize", "")
+
+	resp := client.call(t, 2, "tools/call", `{"name":"intent_create","arguments":{"repo":"github.com/example/repo","title":"Add feature","goal":"Implement it","acceptance":[{"text":"tests pass"}],"scope":{"allow":["internal/auth/**"],"mode":"enforce"},"capability_token":`+string(quoted)+`}}`)
+	result := resp["result"].(map[string]any)
+	if result["isError"] == true {
+		t.Fatalf("intent_create with a stringified capability token failed: %v", result)
 	}
 }
 

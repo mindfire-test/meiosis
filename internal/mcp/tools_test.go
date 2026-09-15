@@ -94,6 +94,48 @@ func TestHandleEvidenceSubmitDefaultsProducerToServerPrincipal(t *testing.T) {
 	}
 }
 
+func TestServerAnswersPing(t *testing.T) {
+	s := newTestServer(t)
+	line := []byte(`{"jsonrpc":"2.0","id":7,"method":"ping"}`)
+	resp := s.handleLine(context.Background(), line)
+	if resp == nil || resp.Error != nil {
+		t.Fatalf("ping response = %+v, want a result with no error", resp)
+	}
+	m, ok := resp.Result.(map[string]any)
+	if !ok || len(m) != 0 {
+		t.Fatalf("ping result = %v, want empty object", resp.Result)
+	}
+}
+
+func TestToolsListIncludesValidInputSchemas(t *testing.T) {
+	s := newTestServer(t)
+	listed := s.handleToolsList().(map[string]any)
+	tools := listed["tools"].([]map[string]any)
+	if len(tools) != 3 {
+		t.Fatalf("tools/list returned %d tools, want 3", len(tools))
+	}
+	for _, tool := range tools {
+		name := tool["name"]
+		schema, ok := tool["inputSchema"].(map[string]any)
+		if !ok {
+			t.Fatalf("tool %v inputSchema missing or not an object (%v)", name, tool["inputSchema"])
+		}
+		if schema["type"] != "object" {
+			t.Fatalf("tool %v inputSchema type = %v, want object", name, schema["type"])
+		}
+		props, ok := schema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("tool %v inputSchema.properties missing", name)
+		}
+		if _, ok := props["capability_token"]; !ok {
+			t.Fatalf("tool %v inputSchema must declare capability_token", name)
+		}
+		if _, err := json.Marshal(schema); err != nil {
+			t.Fatalf("tool %v inputSchema not JSON-marshalable: %v", name, err)
+		}
+	}
+}
+
 func TestHandleIntentCreateRejectsInvalidArgs(t *testing.T) {
 	s := newTestServer(t)
 	if _, err := handleIntentCreate(context.Background(), s, json.RawMessage(`{"repo":`)); err == nil {
