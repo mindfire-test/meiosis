@@ -1,23 +1,165 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/mindfire-test/meiosis/internal/graph"
 	"github.com/mindfire-test/meiosis/internal/identity"
 	"github.com/mindfire-test/meiosis/pkg/crypto"
 	specv1 "github.com/mindfire-test/meiosis/pkg/spec/v1"
+	"github.com/mindfire-test/meiosis/pkg/storage/sqlite"
 )
 
-// newIntentCommand builds the "intent" command tree: the existing stub
-// action plus "authorize", which issues signed capability tokens (FR-1.3).
+// newIntentCommand builds the "intent" command tree: "declare", which signs
+// and persists a new intent as the human operator, and "authorize", which
+// issues signed capability tokens scoping an agent to that intent (FR-1.3).
 func newIntentCommand(settings *Settings) *cobra.Command {
 	intent := newActionCommand("intent", "Manage intents", settings)
+	intent.AddCommand(newIntentDeclareCommand(settings))
 	intent.AddCommand(newIntentAuthorizeCommand())
 	return intent
+}
+
+// newIntentDeclareCommand implements "mei intent declare <title>": it builds,
+// signs and persists a new intent using the repository's human key
+// (.meiosis/human.private.key) into the same SQLite store the meiosisd daemon
+// serves, so intents declared on the CLI are immediately visible to agents.
+func newIntentDeclareCommand(settings *Settings) *cobra.Command {
+	var (
+		goal       string
+		acceptance []string
+		files      []string
+		deny       []string
+		mode       string
+		createdBy  string
+		keyPath    string
+		dbPath     string
+	)
+
+	cmd := &cobra.Command{
+		Use:     "declare <title>",
+		Short:   "Declare a new intent, signed by the repository human key",
+		Args:    cobra.ExactArgs(1),
+		Example: "  mei intent declare \"Refactor the Button component\" --files \"src/components/Button.tsx\"",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			title := args[0]
+			if strings.TrimSpace(title) == "" {
+				return fmt.Errorf("intent title must not be empty")
+			}
+
+			root := settings.Repo
+			if root == "" {
+				root = "."
+			}
+			absRoot, err := filepath.Abs(root)
+			if err != nil {
+				return fmt.Errorf("resolve repo path: %w", err)
+			}
+
+			if keyPath == "" {
+				keyPath = filepath.Join(absRoot, ".meiosis", "human.private.key")
+			}
+			if dbPath == "" {
+				dbPath = filepath.Join(absRoot, ".meiosis", "meiosisd.db")
+			}
+
+			keyData, err := os.ReadFile(keyPath)
+			if err != nil {
+				return fmt.Errorf("read human key %s: %w (run `mei init` to bootstrap the repository)", keyPath, err)
+			}
+			keys, err := crypto.LoadEncodedKeyPair(string(keyData), "")
+			if err != nil {
+				return fmt.Errorf("load human key: %w", err)
+			}
+
+			store, err := sqlite.Open(dbPath)
+			if err != nil {
+				return fmt.Errorf("open store %s: %w", dbPath, err)
+			}
+			defer func() { _ = store.Close() }()
+			graphStore, err := graph.New(store)
+			if err != nil {
+				return fmt.Errorf("open graph: %w", err)
+			}
+
+			if goal == "" {
+				goal = title
+			}
+			criteria := make([]specv1.Criterion, 0, len(acceptance))
+			for _, text := range acceptance {
+				criteria = append(criteria, specv1.Criterion{Text: text})
+			}
+			if len(criteria) == 0 {
+				criteria = append(criteria, specv1.Criterion{Text: title})
+			}
+			allow := files
+			if len(allow) == 0 {
+				allow = []string{"**"}
+			}
+			by := createdBy
+			if by == "" {
+				name, nameErr := defaultHumanName()
+				if nameErr != nil {
+					return nameErr
+				}
+				by = "human:" + name
+			}
+
+			intent, createErr := graphStore.CreateIntent(context.Background(), graph.CreateIntentParams{
+				Repo:       absRoot,
+				Title:      title,
+				Goal:       goal,
+				Acceptance: criteria,
+				Scope:      specv1.Scope{Allow: allow, Deny: deny, Mode: specv1.ScopeMode(mode)},
+				CreatedBy:  by,
+			}, keys.PrivateKey)
+			if createErr != nil {
+				return fmt.Errorf("declare intent: %w", createErr)
+			}
+
+			if settings.Format == "json" {
+				payload := map[string]any{
+					"id":     intent.ID,
+					"title":  intent.Title,
+					"goal":   intent.Goal,
+					"repo":   intent.Repo,
+					"scope":  intent.Scope,
+					"status": intent.Status,
+				}
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(payload)
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "intent %s declared and signed: %s\n  scope: allow %s (mode %s)%s\n",
+				intent.ID, intent.Title, strings.Join(allow, ", "), intent.Scope.Mode, denyClause(deny))
+			return err
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVar(&goal, "goal", "", "the change's goal (default: the title)")
+	flags.StringArrayVar(&acceptance, "acceptance", nil, "acceptance criterion (repeatable; default: the title)")
+	flags.StringArrayVar(&files, "files", nil, "path/glob the intents lets agents touch (repeatable; default: **)")
+	flags.StringArrayVar(&deny, "deny", nil, "path/glob agents may not touch even if allowed (repeatable)")
+	flags.StringVar(&mode, "mode", string(specv1.ScopeModeEnforce), "scope mode: enforce or warn")
+	flags.StringVar(&createdBy, "created-by", "", "declaring principal (default: human:<username>)")
+	flags.StringVar(&keyPath, "key", "", "path to the human signing key (default: <repo>/.meiosis/human.private.key)")
+	flags.StringVar(&dbPath, "db", "", "path to the store database (default: <repo>/.meiosis/meiosisd.db)")
+
+	return cmd
+}
+
+func denyClause(deny []string) string {
+	if len(deny) == 0 {
+		return ""
+	}
+	return "; deny " + strings.Join(deny, ", ")
 }
 
 // newIntentAuthorizeCommand implements "mei intent authorize": it signs a
