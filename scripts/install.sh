@@ -15,7 +15,7 @@
 set -euo pipefail
 
 version="${MEI_VERSION:-latest}"
-repo="${MEI_REPO:-mindfire-test/meiosis}"
+repo="${MEI_REPO:-subhranshus-mindfire/meiosis}"
 prefix="${MEI_PREFIX:-/usr/local/bin}"
 
 say() { printf '\033[1;36m[mei install]\033[0m %s\n' "$*"; }
