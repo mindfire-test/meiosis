@@ -77,7 +77,7 @@ Run it again to repair a partial setup. --force regenerates secrets.
 
 	flags := cmd.Flags()
 	flags.StringVar(&opts.repo, "repo", "", "repository to bootstrap (default: configured repo)")
-	flags.StringVar(&opts.ide, "ide", "", "IDE to register meiosisd in: antigravity, none, or empty to auto-detect (default: auto-detect)")
+	flags.StringVar(&opts.ide, "ide", "", "IDE(s) to register meiosisd in: vscode, antigravity, none, comma-separated (e.g. vscode,antigravity), or empty to auto-detect")
 	flags.StringVar(&opts.agent, "agent", "", "agent principal the capability is granted to (default: agent:meiosis)")
 	flags.StringVar(&opts.issuer, "issuer", "", "issuing human principal (default: human:<username>)")
 	flags.BoolVar(&opts.force, "force", false, "regenerate secrets and overwrite generated files")
@@ -142,16 +142,18 @@ func runInit(out io.Writer, opts *initOptions) error {
 		return agentsErr
 	}
 
-	binPath, err := ensureDaemonBinary(writer, root)
-	if err != nil {
-		return err
+	binPath := filepath.Join(root, "bin", initServerName)
+	if opts.ide != "none" {
+		if binPath, err = ensureDaemonBinary(writer, root); err != nil {
+			return err
+		}
 	}
 
 	if err := writeIDEMCPConfig(writer, opts, homeDir(), root, binPath, agent, agentPriv, humanPub); err != nil {
 		return err
 	}
 
-	printInitSummary(out, opts.dryRun, root, issuer, agent, tokenPath, token)
+	printInitSummary(out, opts.dryRun, opts.ide, root, issuer, agent, tokenPath, token)
 	return nil
 }
 
@@ -333,7 +335,16 @@ func ensureDaemonBinary(w *bootstrapWriter, root string) (string, error) {
 		return binPath, nil
 	}
 	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
-		return binPath, nil
+		if resolved, err := exec.LookPath(initServerName); err == nil {
+			abs, err := filepath.Abs(resolved)
+			if err != nil {
+				abs = resolved
+			}
+			_, _ = fmt.Fprintf(w.out, "using:   %s (installed binary)\n", relHome(abs))
+			return abs, nil
+		}
+		return "", fmt.Errorf("init: %s not found in %s or on PATH — run `make install` before init in a non-Go directory",
+			initServerName, relHome(filepath.Join(root, "bin")))
 	}
 	if w.dry {
 		_, _ = fmt.Fprintf(w.out, "would build: %s\n", relHome(binPath))
@@ -353,13 +364,22 @@ func ensureDaemonBinary(w *bootstrapWriter, root string) (string, error) {
 
 func writeIDEMCPConfig(w *bootstrapWriter, opts *initOptions, home, root, binPath, agent, agentPriv, humanPub string) error {
 	ide := opts.ide
-	ideDir := filepath.Join(home, initIDEDirName)
 
 	if ide == "" {
-		if fi, err := os.Stat(ideDir); err == nil && fi.IsDir() {
+		antigravityDir := filepath.Join(home, initIDEDirName)
+		_, agErr := os.Stat(antigravityDir)
+		hasAG := agErr == nil
+		_, vsErr := os.Stat(filepath.Join(root, ".vscode"))
+		hasVS := vsErr == nil
+		switch {
+		case hasAG && hasVS:
+			ide = "vscode,antigravity"
+		case hasAG:
 			ide = "antigravity"
-		} else {
-			_, _ = fmt.Fprintf(w.out, "no IDE detected (looked for %s) — rerun with --ide antigravity to register\n", relHome(ideDir))
+		case hasVS:
+			ide = "vscode"
+		default:
+			_, _ = fmt.Fprintf(w.out, "no IDE detected — rerun with --ide vscode or --ide antigravity to register\n")
 			return nil
 		}
 	}
@@ -367,10 +387,27 @@ func writeIDEMCPConfig(w *bootstrapWriter, opts *initOptions, home, root, binPat
 		_, _ = fmt.Fprintln(w.out, "skipping IDE MCP registration (--ide none)")
 		return nil
 	}
-	if ide != "antigravity" {
-		return fmt.Errorf("init: unsupported IDE %q (supported: antigravity)", ide)
-	}
 
+	for _, name := range strings.Split(ide, ",") {
+		name = strings.TrimSpace(name)
+		switch name {
+		case "antigravity":
+			if err := writeAntigravityConfig(w, opts, home, root, binPath, agent, agentPriv, humanPub); err != nil {
+				return err
+			}
+		case "vscode":
+			if err := writeVSCodeConfig(w, opts, root, binPath, agent, agentPriv, humanPub); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("init: unsupported IDE %q (supported: vscode, antigravity, or both e.g. --ide vscode,antigravity)", name)
+		}
+	}
+	return nil
+}
+
+func writeAntigravityConfig(w *bootstrapWriter, opts *initOptions, home, root, binPath, agent, agentPriv, humanPub string) error {
+	ideDir := filepath.Join(home, initIDEDirName)
 	cfgPath := filepath.Join(ideDir, "mcp_config.json")
 	server := map[string]any{
 		"command": binPath,
@@ -404,7 +441,50 @@ func writeIDEMCPConfig(w *bootstrapWriter, opts *initOptions, home, root, binPat
 	return w.write(cfgPath, encoded, 0o644, opts.force)
 }
 
-func printInitSummary(out io.Writer, dry bool, root, issuer, agent, tokenPath string, token specv1.CapabilityToken) {
+func writeVSCodeConfig(w *bootstrapWriter, opts *initOptions, root, binPath, agent, agentPriv, humanPub string) error {
+	vscodeDir := filepath.Join(root, ".vscode")
+	cfgPath := filepath.Join(vscodeDir, "mcp.json")
+
+	dbPath := filepath.Join(".meiosis", "meiosisd.db")
+
+	server := map[string]any{
+		"type":    "stdio",
+		"command": binPath,
+		"args": []string{
+			"-principal", agent,
+			"-key", agentPriv,
+			"-db", dbPath,
+			"-issuer-pubkey", humanPub,
+		},
+	}
+
+	cfg := map[string]any{"inputs": []any{}, "servers": map[string]any{}}
+	if existing, err := os.ReadFile(cfgPath); err == nil && len(existing) > 0 {
+		var parsed map[string]any
+		if err := json.Unmarshal(existing, &parsed); err != nil {
+			return fmt.Errorf("init: %s exists but is not valid JSON — merge the server manually: %w", cfgPath, err)
+		}
+		cfg = parsed
+	}
+	servers, ok := cfg["servers"].(map[string]any)
+	if !ok {
+		servers = map[string]any{}
+	}
+	servers[initServerName] = server
+	cfg["servers"] = servers
+
+	encoded, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("init: encode MCP config: %w", err)
+	}
+
+	if err := os.MkdirAll(vscodeDir, 0o755); err != nil {
+		return fmt.Errorf("init: create %s: %w", vscodeDir, err)
+	}
+	return w.write(cfgPath, encoded, 0o644, opts.force)
+}
+
+func printInitSummary(out io.Writer, dry bool, ide, root, issuer, agent, tokenPath string, token specv1.CapabilityToken) {
 	if dry {
 		_, _ = fmt.Fprint(out, "\n[init] dry run: nothing was written.\n")
 		return
@@ -417,10 +497,27 @@ func printInitSummary(out io.Writer, dry bool, root, issuer, agent, tokenPath st
 	if !token.ExpiresAt.IsZero() {
 		_, _ = fmt.Fprintf(out, "  token ttl  : expires %s\n", token.ExpiresAt.Format(time.RFC3339))
 	}
-	_, _ = fmt.Fprint(out, "\nOpen this repository in the Antigravity IDE: the meiosisd server and its\n")
-	_, _ = fmt.Fprintf(out, "three tools (intent_create, intent_check_path, evidence_submit) will be\navailable. Approve them when prompted, then try:\n")
-	_, _ = fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
-	_, _ = fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
+	switch {
+	case ide == "none" || ide == "":
+		_, _ = fmt.Fprint(out, "\nmeiosisd was not registered with an IDE (use --ide vscode or --ide antigravity).\n")
+	case ide == "vscode":
+		_, _ = fmt.Fprintf(out, "\nOpen this repository in VS Code: the meiosisd server is registered in\n%s. Approve/enable the MCP server when prompted, then try:\n", relHome(filepath.Join(root, ".vscode", "mcp.json")))
+		_, _ = fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
+		_, _ = fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
+	default:
+		_, _ = fmt.Fprint(out, "\nThe meiosisd server is registered with your IDE(s):\n")
+		for _, name := range strings.Split(ide, ",") {
+			switch strings.TrimSpace(name) {
+			case "vscode":
+				_, _ = fmt.Fprintf(out, "  - VS Code: %s\n", relHome(filepath.Join(root, ".vscode", "mcp.json")))
+			case "antigravity":
+				_, _ = fmt.Fprintf(out, "  - Antigravity: %s\n", relHome(filepath.Join(homeDir(), initIDEDirName, "mcp_config.json")))
+			}
+		}
+		_, _ = fmt.Fprint(out, "\nApprove/enable the meiosisd server when your IDE prompts, then try:\n")
+		_, _ = fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
+		_, _ = fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
+	}
 }
 
 func defaultHumanName() (string, error) {

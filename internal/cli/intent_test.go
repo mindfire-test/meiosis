@@ -83,3 +83,40 @@ func TestIntentAuthorizeRequiresFlags(t *testing.T) {
 		t.Fatal("Execute() expected an error for missing required flags")
 	}
 }
+
+func TestIntentDeclareSignsAndPersists(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := initRepo(t)
+	execute(t, "init", "--repo", root, "--ide", "none")
+
+	output := execute(t,
+		"intent", "declare", "Refactor the Button component",
+		"--repo", root,
+		"--files", "src/components/Button.tsx",
+		"--acceptance", "tests pass",
+		"--created-by", "human:lakin",
+	)
+	if !strings.Contains(output, "intent int_") {
+		t.Fatalf("output = %q, want a declared intent ID", output)
+	}
+	if !strings.Contains(output, "Refactor the Button component") {
+		t.Fatalf("output = %q, want declared title", output)
+	}
+	if !strings.Contains(output, "src/components/Button.tsx") {
+		t.Fatalf("output = %q, want files path", output)
+	}
+	if !strings.Contains(output, "mode enforce") {
+		t.Fatalf("output = %q, want mode enforce", output)
+	}
+}
+
+func TestIntentDeclareRequiresTitle(t *testing.T) {
+	command := New(nil)
+	var output strings.Builder
+	command.SetOut(&output)
+	command.SetErr(&output)
+	command.SetArgs([]string{"intent", "declare"})
+	if err := command.Execute(); err == nil {
+		t.Fatal("Execute() expected an error for a missing title")
+	}
+}

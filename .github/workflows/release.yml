@@ -25,7 +25,9 @@ jobs:
         run: bash scripts/release.sh "$GITHUB_REF_NAME"
 
       - name: Include installer in release
-        run: cp scripts/install.sh dist/install.sh
+        run: |
+          cp scripts/install.sh dist/install.sh
+          cp scripts/install.ps1 dist/install.ps1
 
       - name: Verify linux/amd64 binary
         run: |
@@ -46,4 +48,5 @@ jobs:
             dist/mei-windows-arm64.zip
             dist/SHA256SUMS.txt
             dist/install.sh
+            dist/install.ps1
           generate_release_notes: true
