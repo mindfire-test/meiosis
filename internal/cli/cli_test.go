@@ -30,6 +30,15 @@ func TestCommandsExecute(t *testing.T) {
 	}
 }
 
+func TestVersionCommand(t *testing.T) {
+	old := Version
+	defer func() { Version = old }()
+	Version = "v1.2.3"
+	if output := execute(t, "version"); !strings.Contains(output, "mei v1.2.3") {
+		t.Fatalf("output = %q, want stamped version", output)
+	}
+}
+
 func TestConfigurationPrecedence(t *testing.T) {
 	directory := t.TempDir()
 	configDirectory := filepath.Join(directory, ".meiosis")
