@@ -21,6 +21,9 @@ import (
 	"github.com/mindfire-test/meiosis/pkg/storage/sqlite"
 )
 
+// version is stamped at build time: -ldflags "-X main.version=v1.2.3".
+var version = "dev"
+
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "meiosisd:", err)
@@ -35,8 +38,13 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	dbPath := fs.String("db", "meiosisd.db", "path to the SQLite database")
 	socketPath := fs.String("socket", "", "optional UNIX socket path to also listen on, in addition to stdio")
 	issuerPubKeyPath := fs.String("issuer-pubkey", "", "path to a trusted issuer's Ed25519 public key (base64 or PEM); when set, every tool call must carry a capability token signed by this issuer (FR-1.3)")
+	printVersion := fs.Bool("version", false, "print the meiosisd version and exit")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *printVersion {
+		fmt.Fprintln(stdout, "meiosisd "+version)
+		return nil
 	}
 	if *principal == "" || *keyPath == "" {
 		return fmt.Errorf("--principal and --key are required")
