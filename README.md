@@ -40,11 +40,20 @@ meiosis attaches it to a content hash.
 
 ### Prebuilt binaries
 
-Quick install (Linux/macOS, detects your OS/arch automatically — installs
-`mei` and `meiosisd` into `/usr/local/bin`, or `~/.local/bin` if not writable):
+Quick install (detects your OS/arch automatically — installs `mei` and
+`meiosisd` into `/usr/local/bin` on Linux/macOS, `%LOCALAPPDATA%\mei` on
+Windows):
+
+**Linux/macOS:**
 
 ```sh
 curl -fsSL https://github.com/subhranshus-mindfire/meiosis/releases/latest/download/install.sh | bash
+```
+
+**Windows (PowerShell, no bash needed):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://github.com/subhranshus-mindfire/meiosis/releases/latest/download/install.ps1 | iex"
 ```
 
 Or download the archive for your platform from the
@@ -68,7 +77,9 @@ mei version
 ```
 
 Optionally verify the download against `SHA256SUMS.txt` from the same release.
-On Windows, unpack the zip and add the folder to your `PATH`.
+
+The Windows installer also adds `mei.exe` to your user PATH — open a new
+terminal after it finishes.
 
 ### From source
 
