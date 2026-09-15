@@ -142,9 +142,11 @@ func runInit(out io.Writer, opts *initOptions) error {
 		return agentsErr
 	}
 
-	binPath, err := ensureDaemonBinary(writer, root)
-	if err != nil {
-		return err
+	binPath := filepath.Join(root, "bin", initServerName)
+	if opts.ide != "none" {
+		if binPath, err = ensureDaemonBinary(writer, root); err != nil {
+			return err
+		}
 	}
 
 	if err := writeIDEMCPConfig(writer, opts, homeDir(), root, binPath, agent, agentPriv, humanPub); err != nil {
