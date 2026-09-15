@@ -28,8 +28,8 @@ jobs:
         run: |
           mkdir -p dist/build-check
           tar xzf dist/mei-linux-amd64.tar.gz --strip-components=1 -C dist/build-check
-          test "$(./dist/build-check/mei version)" = "mei ${GITHUB_REF_NAME#v}"
-          ./dist/build-check/meiosisd -version | grep -q "^meiosisd " && test "$(./dist/build-check/meiosisd -version)" = "meiosisd ${GITHUB_REF_NAME#v}"
+          test "$(./dist/build-check/mei version)" = "mei ${GITHUB_REF_NAME}"
+          ./dist/build-check/meiosisd -version | grep -q "^meiosisd " && test "$(./dist/build-check/meiosisd -version)" = "meiosisd ${GITHUB_REF_NAME}"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2

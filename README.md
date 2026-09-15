@@ -41,7 +41,7 @@ meiosis attaches it to a content hash.
 ### Prebuilt binaries
 
 Download the archive for your platform from the
-[latest release](https://github.com/subhranshus-mindfire/meiosis/releases/latest)
+[latest release](https://github.com/mindfire-test/meiosis/releases/latest)
 (each contains both `mei` and `meiosisd`):
 
 | Platform | Archive |
@@ -54,7 +54,7 @@ Linux/macOS example:
 
 ```sh
 curl -sSLo mei-linux-amd64.tar.gz \
-  https://github.com/subhranshus-mindfire/meiosis/releases/latest/download/mei-linux-amd64.tar.gz
+  https://github.com/mindfire-test/meiosis/releases/latest/download/mei-linux-amd64.tar.gz
 tar xzf mei-linux-amd64.tar.gz
 install -m 0755 mei meiosisd /usr/local/bin
 mei version
