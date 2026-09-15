@@ -21,6 +21,7 @@ type ToolHandler func(ctx context.Context, s *Server, args json.RawMessage) (any
 
 type tool struct {
 	description string
+	inputSchema map[string]any
 	handler     ToolHandler
 }
 
@@ -105,6 +106,8 @@ func (s *Server) dispatch(ctx context.Context, req Request) (any, error) {
 	switch req.Method {
 	case "initialize":
 		return s.handleInitialize(), nil
+	case "ping":
+		return map[string]any{}, nil
 	case "tools/list":
 		return s.handleToolsList(), nil
 	case "tools/call":
@@ -133,7 +136,11 @@ func (s *Server) handleInitialize() any {
 func (s *Server) handleToolsList() any {
 	tools := make([]map[string]any, 0, len(s.tools))
 	for name, t := range s.tools {
-		tools = append(tools, map[string]any{"name": name, "description": t.description})
+		tools = append(tools, map[string]any{
+			"name":        name,
+			"description": t.description,
+			"inputSchema": t.inputSchema,
+		})
 	}
 	return map[string]any{"tools": tools}
 }
@@ -196,6 +203,14 @@ func (s *Server) requireCapabilityToken(args json.RawMessage, path string) error
 		return &rpcError{code: ErrCodeInvalidParams, message: "capability_token is required"}
 	}
 	token, err := identity.Decode(envelope.CapabilityToken)
+	if err != nil && json.Valid(envelope.CapabilityToken) {
+		// Some clients send the token object serialized as a JSON string
+		// rather than embedded. Accept that form: re-parse the string.
+		var quoted string
+		if umErr := json.Unmarshal(envelope.CapabilityToken, &quoted); umErr == nil {
+			token, err = identity.Decode([]byte(quoted))
+		}
+	}
 	if err != nil {
 		return &rpcError{code: ErrCodeInvalidParams, message: "capability_token: " + err.Error()}
 	}

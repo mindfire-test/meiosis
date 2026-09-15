@@ -60,8 +60,8 @@ func (s *Store) CreateIntent(ctx context.Context, p CreateIntentParams, signerKe
 	}
 	intent.Signature = signature
 
-	if err := intent.Validate(); err != nil {
-		return specv1.Intent{}, fmt.Errorf("%w: %v", ErrInvalidParams, err)
+	if validateErr := intent.Validate(); validateErr != nil {
+		return specv1.Intent{}, fmt.Errorf("%w: %v", ErrInvalidParams, validateErr)
 	}
 
 	encoded, err := specv1.Canonicalize(intent)
@@ -150,8 +150,8 @@ func (s *Store) SubmitEvidence(ctx context.Context, p SubmitEvidenceParams, sign
 	}
 	evidence.Signature = signature
 
-	if err := evidence.Validate(); err != nil {
-		return specv1.Evidence{}, fmt.Errorf("%w: %v", ErrInvalidParams, err)
+	if validateErr := evidence.Validate(); validateErr != nil {
+		return specv1.Evidence{}, fmt.Errorf("%w: %v", ErrInvalidParams, validateErr)
 	}
 
 	encoded, err := specv1.Canonicalize(evidence)
