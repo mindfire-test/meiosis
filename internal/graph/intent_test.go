@@ -42,8 +42,8 @@ func TestCreateIntentThenGetIntentRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateIntent() error = %v", err)
 	}
-	if err := created.Validate(); err != nil {
-		t.Fatalf("created Intent.Validate() error = %v", err)
+	if validateErr := created.Validate(); validateErr != nil {
+		t.Fatalf("created Intent.Validate() error = %v", validateErr)
 	}
 	ok, err := crypto.Verify(created, created.Signature, keys.PublicKey)
 	if err != nil || !ok {
@@ -118,8 +118,8 @@ func TestSubmitEvidenceThenGetEvidenceRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubmitEvidence() error = %v", err)
 	}
-	if err := created.Validate(); err != nil {
-		t.Fatalf("created Evidence.Validate() error = %v", err)
+	if validateErr := created.Validate(); validateErr != nil {
+		t.Fatalf("created Evidence.Validate() error = %v", validateErr)
 	}
 	ok, err := crypto.Verify(created, created.Signature, keys.PublicKey)
 	if err != nil || !ok {

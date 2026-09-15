@@ -43,7 +43,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		return err
 	}
 	if *printVersion {
-		fmt.Fprintln(stdout, "meiosisd "+version)
+		_, _ = fmt.Fprintln(stdout, "meiosisd "+version)
 		return nil
 	}
 	if *principal == "" || *keyPath == "" {
@@ -63,7 +63,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("open storage: %w", err)
 	}
-	defer backend.Close()
+	defer func() { _ = backend.Close() }()
 
 	server := mcp.NewServer(graph.NewStore(backend), *principal, keys.PrivateKey)
 
@@ -103,7 +103,7 @@ func serveSocket(ctx context.Context, server *mcp.Server, path string) error {
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", path, err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	go func() {
 		<-ctx.Done()
@@ -121,7 +121,7 @@ func serveSocket(ctx context.Context, server *mcp.Server, path string) error {
 			}
 		}
 		go func() {
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 			_ = server.Serve(ctx, conn, conn)
 		}()
 	}

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mindfire-test/meiosis/pkg/spec/v1"
+	specv1 "github.com/mindfire-test/meiosis/pkg/spec/v1"
 	"github.com/zeebo/blake3"
 )
 
@@ -17,7 +17,7 @@ import (
 // storage strategy; structural sharing remains outside this package.
 type World struct {
 	tree Tree
-	hash v1.WorldHash
+	hash specv1.WorldHash
 }
 
 // New creates a world from a tree snapshot and computes its deterministic
@@ -50,7 +50,7 @@ func Snapshot(ctx context.Context, source Snapshotter) (World, error) {
 }
 
 // Hash returns the content address of the world.
-func (w World) Hash() v1.WorldHash {
+func (w World) Hash() specv1.WorldHash {
 	return w.hash
 }
 
@@ -120,13 +120,13 @@ func (w World) Diff(ctx context.Context, other World) ([]Change, error) {
 	return changes, nil
 }
 
-func hashFiles(files map[string][]byte) (v1.WorldHash, error) {
+func hashFiles(files map[string][]byte) (specv1.WorldHash, error) {
 	// This is a temporary deterministic file-tree encoding. The eventual
 	// zygote/vfs adapter will own production Merkle-tree semantics.
 	paths := make([]string, 0, len(files))
 	for filePath := range files {
 		if err := validatePath(filePath); err != nil {
-			return v1.WorldHash{}, err
+			return specv1.WorldHash{}, err
 		}
 		paths = append(paths, filePath)
 	}
@@ -143,7 +143,7 @@ func hashFiles(files map[string][]byte) (v1.WorldHash, error) {
 		_, _ = hasher.Write(content)
 	}
 	digest := hasher.Sum(nil)
-	var hash v1.WorldHash
+	var hash specv1.WorldHash
 	copy(hash[:], digest)
 	return hash, nil
 }

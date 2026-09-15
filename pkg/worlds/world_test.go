@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/mindfire-test/meiosis/pkg/spec/v1"
+	specv1 "github.com/mindfire-test/meiosis/pkg/spec/v1"
 )
 
 func TestIdenticalTreesHaveIdenticalWorldHashes(t *testing.T) {
@@ -133,7 +133,7 @@ func TestWorldHashUsesSpecWorldHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if world.Hash() == (v1.WorldHash{}) {
+	if world.Hash() == (specv1.WorldHash{}) {
 		t.Fatal("empty tree produced zero WorldHash")
 	}
 }

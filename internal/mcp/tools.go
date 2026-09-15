@@ -166,13 +166,13 @@ func handleEvidenceSubmit(ctx context.Context, s *Server, raw json.RawMessage) (
 	// token itself is verified; evidence with one authorizes each path it
 	// claims to have touched.
 	if len(args.Footprint) == 0 {
-		if err := s.requireCapabilityToken(raw, ""); err != nil {
-			return nil, err
+		if tokenErr := s.requireCapabilityToken(raw, ""); tokenErr != nil {
+			return nil, tokenErr
 		}
 	}
 	for _, path := range args.Footprint {
-		if err := s.requireCapabilityToken(raw, path); err != nil {
-			return nil, err
+		if tokenErr := s.requireCapabilityToken(raw, path); tokenErr != nil {
+			return nil, tokenErr
 		}
 	}
 
