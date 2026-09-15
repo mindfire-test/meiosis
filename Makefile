@@ -7,6 +7,8 @@ build:
 	@echo "==> Building mei CLI..."
 	@mkdir -p bin
 	@go build -o bin/mei ./cmd/mei
+	@echo "==> Building meiosisd daemon..."
+	@go build -o bin/meiosisd ./cmd/meiosisd
 
 test:
 	@echo "==> Running tests..."
