@@ -40,7 +40,14 @@ meiosis attaches it to a content hash.
 
 ### Prebuilt binaries
 
-Download the archive for your platform from the
+Quick install (Linux/macOS, detects your OS/arch automatically — installs
+`mei` and `meiosisd` into `/usr/local/bin`, or `~/.local/bin` if not writable):
+
+```sh
+curl -fsSL https://github.com/mindfire-test/meiosis/releases/latest/download/install.sh | bash
+```
+
+Or download the archive for your platform from the
 [latest release](https://github.com/mindfire-test/meiosis/releases/latest)
 (each contains both `mei` and `meiosisd`):
 

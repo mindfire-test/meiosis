@@ -24,6 +24,9 @@ jobs:
       - name: Build release artifacts
         run: bash scripts/release.sh "$GITHUB_REF_NAME"
 
+      - name: Include installer in release
+        run: cp scripts/install.sh dist/install.sh
+
       - name: Verify linux/amd64 binary
         run: |
           mkdir -p dist/build-check
@@ -42,4 +45,5 @@ jobs:
             dist/mei-windows-amd64.zip
             dist/mei-windows-arm64.zip
             dist/SHA256SUMS.txt
+            dist/install.sh
           generate_release_notes: true
