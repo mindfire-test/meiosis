@@ -497,10 +497,10 @@ func printInitSummary(out io.Writer, dry bool, ide, root, issuer, agent, tokenPa
 	if !token.ExpiresAt.IsZero() {
 		_, _ = fmt.Fprintf(out, "  token ttl  : expires %s\n", token.ExpiresAt.Format(time.RFC3339))
 	}
-	switch {
-	case ide == "none" || ide == "":
+	switch ide {
+	case "none", "":
 		_, _ = fmt.Fprint(out, "\nmeiosisd was not registered with an IDE (use --ide vscode or --ide antigravity).\n")
-	case ide == "vscode":
+	case "vscode":
 		_, _ = fmt.Fprintf(out, "\nOpen this repository in VS Code: the meiosisd server is registered in\n%s. Approve/enable the MCP server when prompted, then try:\n", relHome(filepath.Join(root, ".vscode", "mcp.json")))
 		_, _ = fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
 		_, _ = fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
