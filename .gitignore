@@ -1,5 +1,7 @@
 # Binaries for programs and plugins
 bin/
+dist/
+
 *.exe
 *.exe~
 *.dll
@@ -24,6 +26,9 @@ go.work.sum
 
 # Meiosis specific db state
 .meiosis/
+
+# Demo capability tokens (signed key material)
+.agents/meiosis-capability.json
 
 # OS/Editor specific
 .idea/
