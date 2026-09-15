@@ -77,7 +77,7 @@ Run it again to repair a partial setup. --force regenerates secrets.
 
 	flags := cmd.Flags()
 	flags.StringVar(&opts.repo, "repo", "", "repository to bootstrap (default: configured repo)")
-	flags.StringVar(&opts.ide, "ide", "", "IDE to register meiosisd in: antigravity, none, or empty to auto-detect (default: auto-detect)")
+	flags.StringVar(&opts.ide, "ide", "", "IDE to register meiosisd in: vscode, antigravity, none, or empty to auto-detect (default: auto-detect)")
 	flags.StringVar(&opts.agent, "agent", "", "agent principal the capability is granted to (default: agent:meiosis)")
 	flags.StringVar(&opts.issuer, "issuer", "", "issuing human principal (default: human:<username>)")
 	flags.BoolVar(&opts.force, "force", false, "regenerate secrets and overwrite generated files")
@@ -151,7 +151,7 @@ func runInit(out io.Writer, opts *initOptions) error {
 		return err
 	}
 
-	printInitSummary(out, opts.dryRun, root, issuer, agent, tokenPath, token)
+	printInitSummary(out, opts.dryRun, opts.ide, root, issuer, agent, tokenPath, token)
 	return nil
 }
 
@@ -353,13 +353,15 @@ func ensureDaemonBinary(w *bootstrapWriter, root string) (string, error) {
 
 func writeIDEMCPConfig(w *bootstrapWriter, opts *initOptions, home, root, binPath, agent, agentPriv, humanPub string) error {
 	ide := opts.ide
-	ideDir := filepath.Join(home, initIDEDirName)
 
 	if ide == "" {
-		if fi, err := os.Stat(ideDir); err == nil && fi.IsDir() {
+		antigravityDir := filepath.Join(home, initIDEDirName)
+		if fi, err := os.Stat(antigravityDir); err == nil && fi.IsDir() {
 			ide = "antigravity"
+		} else if _, err := os.Stat(filepath.Join(root, ".vscode")); err == nil {
+			ide = "vscode"
 		} else {
-			_, _ = fmt.Fprintf(w.out, "no IDE detected (looked for %s) — rerun with --ide antigravity to register\n", relHome(ideDir))
+			_, _ = fmt.Fprintf(w.out, "no IDE detected — rerun with --ide vscode or --ide antigravity to register\n")
 			return nil
 		}
 	}
@@ -367,10 +369,19 @@ func writeIDEMCPConfig(w *bootstrapWriter, opts *initOptions, home, root, binPat
 		_, _ = fmt.Fprintln(w.out, "skipping IDE MCP registration (--ide none)")
 		return nil
 	}
-	if ide != "antigravity" {
-		return fmt.Errorf("init: unsupported IDE %q (supported: antigravity)", ide)
-	}
 
+	switch ide {
+	case "antigravity":
+		return writeAntigravityConfig(w, opts, home, root, binPath, agent, agentPriv, humanPub)
+	case "vscode":
+		return writeVSCodeConfig(w, opts, root, binPath, agent, agentPriv, humanPub)
+	default:
+		return fmt.Errorf("init: unsupported IDE %q (supported: vscode, antigravity)", ide)
+	}
+}
+
+func writeAntigravityConfig(w *bootstrapWriter, opts *initOptions, home, root, binPath, agent, agentPriv, humanPub string) error {
+	ideDir := filepath.Join(home, initIDEDirName)
 	cfgPath := filepath.Join(ideDir, "mcp_config.json")
 	server := map[string]any{
 		"command": binPath,
@@ -404,7 +415,50 @@ func writeIDEMCPConfig(w *bootstrapWriter, opts *initOptions, home, root, binPat
 	return w.write(cfgPath, encoded, 0o644, opts.force)
 }
 
-func printInitSummary(out io.Writer, dry bool, root, issuer, agent, tokenPath string, token specv1.CapabilityToken) {
+func writeVSCodeConfig(w *bootstrapWriter, opts *initOptions, root, binPath, agent, agentPriv, humanPub string) error {
+	vscodeDir := filepath.Join(root, ".vscode")
+	cfgPath := filepath.Join(vscodeDir, "mcp.json")
+
+	dbPath := filepath.Join(".meiosis", "meiosisd.db")
+
+	server := map[string]any{
+		"type":    "stdio",
+		"command": binPath,
+		"args": []string{
+			"-principal", agent,
+			"-key", agentPriv,
+			"-db", dbPath,
+			"-issuer-pubkey", humanPub,
+		},
+	}
+
+	cfg := map[string]any{"inputs": []any{}, "servers": map[string]any{}}
+	if existing, err := os.ReadFile(cfgPath); err == nil && len(existing) > 0 {
+		var parsed map[string]any
+		if err := json.Unmarshal(existing, &parsed); err != nil {
+			return fmt.Errorf("init: %s exists but is not valid JSON — merge the server manually: %w", cfgPath, err)
+		}
+		cfg = parsed
+	}
+	servers, ok := cfg["servers"].(map[string]any)
+	if !ok {
+		servers = map[string]any{}
+	}
+	servers[initServerName] = server
+	cfg["servers"] = servers
+
+	encoded, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("init: encode MCP config: %w", err)
+	}
+
+	if err := os.MkdirAll(vscodeDir, 0o755); err != nil {
+		return fmt.Errorf("init: create %s: %w", vscodeDir, err)
+	}
+	return w.write(cfgPath, encoded, 0o644, opts.force)
+}
+
+func printInitSummary(out io.Writer, dry bool, ide, root, issuer, agent, tokenPath string, token specv1.CapabilityToken) {
 	if dry {
 		_, _ = fmt.Fprint(out, "\n[init] dry run: nothing was written.\n")
 		return
@@ -417,10 +471,19 @@ func printInitSummary(out io.Writer, dry bool, root, issuer, agent, tokenPath st
 	if !token.ExpiresAt.IsZero() {
 		_, _ = fmt.Fprintf(out, "  token ttl  : expires %s\n", token.ExpiresAt.Format(time.RFC3339))
 	}
-	_, _ = fmt.Fprint(out, "\nOpen this repository in the Antigravity IDE: the meiosisd server and its\n")
-	_, _ = fmt.Fprintf(out, "three tools (intent_create, intent_check_path, evidence_submit) will be\navailable. Approve them when prompted, then try:\n")
-	_, _ = fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
-	_, _ = fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
+	switch ide {
+	case "none", "":
+		_, _ = fmt.Fprint(out, "\nmeiosisd was not registered with an IDE (use --ide vscode or --ide antigravity).\n")
+	case "vscode":
+		_, _ = fmt.Fprintf(out, "\nOpen this repository in VS Code: the meiosisd server is registered in\n%s. Approve/enable the MCP server when prompted, then try:\n", relHome(filepath.Join(root, ".vscode", "mcp.json")))
+		_, _ = fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
+		_, _ = fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
+	default:
+		_, _ = fmt.Fprint(out, "\nOpen this repository in the Antigravity IDE: the meiosisd server and its\n")
+		_, _ = fmt.Fprintf(out, "three tools (intent_create, intent_check_path, evidence_submit) will be\navailable. Approve them when prompted, then try:\n")
+		_, _ = fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
+		_, _ = fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
+	}
 }
 
 func defaultHumanName() (string, error) {

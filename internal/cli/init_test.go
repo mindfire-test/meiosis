@@ -136,9 +136,31 @@ func TestInitSkipsUnsupportedIDE(t *testing.T) {
 	var output strings.Builder
 	command.SetOut(&output)
 	command.SetErr(&output)
-	command.SetArgs([]string{"init", "--repo", root, "--ide", "vscode"})
+	command.SetArgs([]string{"init", "--repo", root, "--ide", "intellij"})
 	if err := command.Execute(); err == nil {
 		t.Fatal("Execute() expected an error for an unsupported IDE")
+	}
+}
+
+func TestInitWritesVSCodeMCPConfig(t *testing.T) {
+	root := initRepo(t)
+	execute(t, "init", "--repo", root, "--ide", "vscode")
+
+	if _, err := os.Stat(filepath.Join(root, ".vscode", "mcp.json")); err != nil {
+		t.Fatalf("init did not create .vscode/mcp.json: %v", err)
+	}
+
+	raw := mustRead(t, filepath.Join(root, ".vscode", "mcp.json"))
+	for _, want := range []string{
+		`"meiosisd"`,
+		`"type": "stdio"`,
+		`"-principal"`,
+		`"-db"`,
+		".meiosis/meiosisd.db",
+	} {
+		if !strings.Contains(raw, want) {
+			t.Fatalf("mcp.json missing %q: %s", want, raw)
+		}
 	}
 }
 
