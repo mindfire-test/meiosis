@@ -35,7 +35,9 @@ arm64 | aarch64) goarch="arm64" ;;
 *) die "unsupported arch: $uname_arch (amd64/arm64 only)" ;;
 esac
 
-ext=".exe"
+ext=""
+work="mei-${goos}-${goarch}"
+[ "$goos" = "windows" ] && ext=".exe"
 archive="mei-${goos}-${goarch}.tar.gz"
 [ "$goos" = "windows" ] && archive="mei-${goos}-${goarch}.zip"
 
@@ -54,12 +56,17 @@ else
 fi
 
 say "platform: ${goos}/${goarch}, version: ${version}"
-say "downloading ${archive} from ${repo}..."
+say "downloading ${archive} from ${repo} (this can take a moment)..."
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-curl -fsSL -o "$tmp/$archive" "${base}/${archive}"
-curl -fsSL -o "$tmp/SHA256SUMS.txt" "${base}/SHA256SUMS.txt"
+if [ -n "${MEI_SHOW_PROGRESS:-}" ]; then
+	say "downloading ${archive}..."
+	curl -L --fail --retry 3 --retry-delay 2 -o "$tmp/$archive" "${base}/${archive}"
+else
+	curl -fsSL --retry 3 --retry-delay 2 -o "$tmp/$archive" "${base}/${archive}"
+fi
+curl -fsSL --retry 3 --retry-delay 2 -o "$tmp/SHA256SUMS.txt" "${base}/SHA256SUMS.txt"
 if command -v sha256sum >/dev/null 2>&1; then
 	(cd "$tmp" && sha256sum --check --status "SHA256SUMS.txt" --ignore-missing 2>/dev/null \
 		|| grep "$archive" "$tmp/SHA256SUMS.txt" | sha256sum --check --status --ignore-missing -)
