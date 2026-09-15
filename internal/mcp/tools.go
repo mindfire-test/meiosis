@@ -10,19 +10,74 @@ import (
 	specv1 "github.com/mindfire-test/meiosis/pkg/spec/v1"
 )
 
+// mcpCapabilityTokenProperty is the JSON Schema fragment listing the
+// capability_token field. The daemon requires it on every tool call while
+// enforcement is on, so it is declared as required in each tool schema. It
+// accepts both an embedded object (the daemon's preferred form, per
+// AGENTS.md) and a serialized JSON string: agents routinely stringify the
+// token, and letting those calls reach the daemon yields a clear corrective
+// error instead of a client-side schema rejection that aborts the agent turn.
+const mcpCapabilityTokenProperty = `"capability_token":{"description":"capability token granting this call (see .agents/meiosis-capability.json)","type":["object","string"]}`
+
+// toolInputSchema parses an authored JSON Schema string. These literals are
+// written by hand at compile time and must stay valid JSON, so a parse
+// failure panics rather than silently serving a null schema.
+func toolInputSchema(s string) map[string]any {
+	var schema map[string]any
+	if err := json.Unmarshal([]byte(s), &schema); err != nil {
+		panic("mcp: invalid tool input schema: " + err.Error())
+	}
+	return schema
+}
+
 func (s *Server) registerTools() {
 	s.tools = map[string]tool{
 		"intent_create": {
 			description: "Declare a new intent (goal, acceptance criteria, scope) and receive a signed Intent.",
-			handler:     handleIntentCreate,
+			inputSchema: toolInputSchema(`{
+				"type": "object",
+				"properties": {
+					"repo":       {"type": "string", "description": "repository this intent applies to"},
+					"title":      {"type": "string"},
+					"goal":       {"type": "string"},
+					"acceptance": {"type": "array", "items": {"type": "object", "properties": {"text": {"type": "string"}, "check": {"type": "object"}}, "required": ["text"]}},
+					"scope":      {"type": "object", "properties": {"allow": {"type": "array", "items": {"type": "string"}}, "deny": {"type": "array", "items": {"type": "string"}}, "mode": {"type": "string", "enum": ["enforce", "warn"]}}, "required": ["allow", "mode"]},
+					` + mcpCapabilityTokenProperty + `
+				},
+				"required": ["repo", "title", "goal", "acceptance", "scope", "capability_token"]
+			}`),
+			handler: handleIntentCreate,
 		},
 		"intent_check_path": {
 			description: "Check whether a path is allowed under an existing intent's declared scope.",
-			handler:     handleIntentCheckPath,
+			inputSchema: toolInputSchema(`{
+				"type": "object",
+				"properties": {
+					"intent": {"type": "string", "description": "intent ID returned by intent_create"},
+					"path":   {"type": "string", "description": "repo-relative path to check against the intent's scope"},
+					` + mcpCapabilityTokenProperty + `
+				},
+				"required": ["intent", "path", "capability_token"]
+			}`),
+			handler: handleIntentCheckPath,
 		},
 		"evidence_submit": {
 			description: "Submit a signed evidence record (e.g. a test run's outcome) bound to a world hash.",
-			handler:     handleEvidenceSubmit,
+			inputSchema: toolInputSchema(`{
+				"type": "object",
+				"properties": {
+					"attempt":   {"type": "string", "description": "attempt ID the evidence is bound to"},
+					"producer":  {"type": "string"},
+					"world":     {"type": "string", "description": "world hash the evidence was produced against"},
+					"kind":      {"type": "string", "enum": ["test-run", "coverage", "type-check", "static-analysis", "benchmark", "mutation"]},
+					"outcome":   {"type": "string", "enum": ["pass", "fail", "inconclusive"]},
+					"payload":   {"type": "object"},
+					"footprint": {"type": "array", "items": {"type": "string"}},
+					` + mcpCapabilityTokenProperty + `
+				},
+				"required": ["attempt", "world", "kind", "outcome", "payload", "capability_token"]
+			}`),
+			handler: handleEvidenceSubmit,
 		},
 	}
 }
