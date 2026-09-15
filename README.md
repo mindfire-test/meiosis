@@ -36,6 +36,59 @@ meiosis attaches it to a content hash.
 
 ---
 
+## Install
+
+### Prebuilt binaries
+
+Download the archive for your platform from the
+[latest release](https://github.com/subhranshus-mindfire/meiosis/releases/latest)
+(each contains both `mei` and `meiosisd`):
+
+| Platform | Archive |
+| --- | --- |
+| Linux x86_64 / arm64 | `mei-linux-amd64.tar.gz` / `mei-linux-arm64.tar.gz` |
+| macOS Intel / Apple Silicon | `mei-darwin-amd64.tar.gz` / `mei-darwin-arm64.tar.gz` |
+| Windows x86_64 / arm64 | `mei-windows-amd64.zip` / `mei-windows-arm64.zip` |
+
+Linux/macOS example:
+
+```sh
+curl -sSLo mei-linux-amd64.tar.gz \
+  https://github.com/subhranshus-mindfire/meiosis/releases/latest/download/mei-linux-amd64.tar.gz
+tar xzf mei-linux-amd64.tar.gz
+install -m 0755 mei meiosisd /usr/local/bin
+mei version
+```
+
+Optionally verify the download against `SHA256SUMS.txt` from the same release.
+On Windows, unpack the zip and add the folder to your `PATH`.
+
+### From source
+
+Requires Go 1.25+.
+
+```sh
+make build        # produces bin/mei and bin/meiosisd
+export PATH="$PWD/bin:$PATH"
+```
+
+### First run
+
+In any repository you want to govern, `mei init` bootstraps everything —
+identity keys, a 30-day capability token, agent instructions, and (with the
+Antigravity IDE) the meiosisd MCP server:
+
+```sh
+cd <your-project>
+mei init
+```
+
+Open the project in Antigravity, approve the `meiosisd` server, and ask the
+agent to declare an intent. `mei init` is idempotent; rerun it to repair a
+partial setup, or `mei init --force` to regenerate secrets.
+
+---
+
 ## Why this exists
 
 The reviewable unit is wrong.
