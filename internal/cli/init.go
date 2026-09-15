@@ -101,9 +101,9 @@ func runInit(out io.Writer, opts *initOptions) error {
 	}
 	issuer := opts.issuer
 	if issuer == "" {
-		name, err := defaultHumanName()
-		if err != nil {
-			return err
+		name, nameErr := defaultHumanName()
+		if nameErr != nil {
+			return nameErr
 		}
 		issuer = "human:" + name
 	}
@@ -119,8 +119,8 @@ func runInit(out io.Writer, opts *initOptions) error {
 
 	writer := &bootstrapWriter{out: out, dry: opts.dryRun}
 
-	if err := writeConfigFile(writer, filepath.Join(meiosisDir, "config.yaml"), opts.force); err != nil {
-		return err
+	if writeErr := writeConfigFile(writer, filepath.Join(meiosisDir, "config.yaml"), opts.force); writeErr != nil {
+		return writeErr
 	}
 
 	humanKeys, err := ensureKeyPair(writer, humanPriv, humanPub, opts.force)
@@ -138,8 +138,8 @@ func runInit(out io.Writer, opts *initOptions) error {
 		return err
 	}
 
-	if err := writeAgentsMD(writer, agentsMD, tokenPath, agentsDir, opts.force, opts); err != nil {
-		return err
+	if agentsErr := writeAgentsMD(writer, agentsMD, tokenPath, agentsDir, opts.force, opts); agentsErr != nil {
+		return agentsErr
 	}
 
 	binPath, err := ensureDaemonBinary(writer, root)
@@ -162,11 +162,11 @@ type bootstrapWriter struct {
 
 func (w *bootstrapWriter) write(path string, data []byte, perm os.FileMode, force bool) error {
 	if _, err := os.Stat(path); err == nil && !force {
-		fmt.Fprintf(w.out, "exists:  %s\n", relHome(path))
+		_, _ = fmt.Fprintf(w.out, "exists:  %s\n", relHome(path))
 		return nil
 	}
 	if w.dry {
-		fmt.Fprintf(w.out, "would write: %s\n", relHome(path))
+		_, _ = fmt.Fprintf(w.out, "would write: %s\n", relHome(path))
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -175,7 +175,7 @@ func (w *bootstrapWriter) write(path string, data []byte, perm os.FileMode, forc
 	if err := os.WriteFile(path, data, perm); err != nil {
 		return fmt.Errorf("init: write %s: %w", path, err)
 	}
-	fmt.Fprintf(w.out, "wrote:   %s\n", relHome(path))
+	_, _ = fmt.Fprintf(w.out, "wrote:   %s\n", relHome(path))
 	return nil
 }
 
@@ -183,15 +183,15 @@ func writeConfigFile(w *bootstrapWriter, path string, force bool) error {
 	content := "repo: .\nformat: text\nverbose: false\n"
 	if _, err := os.Stat(path); err == nil {
 		if !force {
-			fmt.Fprintf(w.out, "exists:  %s\n", relHome(path))
+			_, _ = fmt.Fprintf(w.out, "exists:  %s\n", relHome(path))
 			return nil
 		}
-		fmt.Fprintf(w.out, "would rewrite: %s\n", relHome(path))
+		_, _ = fmt.Fprintf(w.out, "would rewrite: %s\n", relHome(path))
 		if !w.dry {
 			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 				return fmt.Errorf("init: rewrite %s: %w", path, err)
 			}
-			fmt.Fprintf(w.out, "wrote:   %s\n", relHome(path))
+			_, _ = fmt.Fprintf(w.out, "wrote:   %s\n", relHome(path))
 		}
 		return nil
 	}
@@ -204,11 +204,11 @@ func ensureKeyPair(w *bootstrapWriter, privPath, pubPath string, force bool) (cr
 		if err != nil {
 			return crypto.KeyPair{}, fmt.Errorf("init: load existing key %s: %w", privPath, err)
 		}
-		fmt.Fprintf(w.out, "exists:  %s\n", relHome(privPath))
+		_, _ = fmt.Fprintf(w.out, "exists:  %s\n", relHome(privPath))
 		return keys, nil
 	}
 	if w.dry {
-		fmt.Fprintf(w.out, "would write: %s\n", relHome(privPath))
+		_, _ = fmt.Fprintf(w.out, "would write: %s\n", relHome(privPath))
 		return crypto.KeyPair{}, nil
 	}
 	keys, err := crypto.GenerateKeyPair()
@@ -232,12 +232,12 @@ func ensureToken(w *bootstrapWriter, tokenPath string, human crypto.KeyPair, opt
 		if err != nil {
 			return specv1.CapabilityToken{}, fmt.Errorf("init: decode existing token %s: %w", tokenPath, err)
 		}
-		fmt.Fprintf(w.out, "exists:  %s\n", relHome(tokenPath))
+		_, _ = fmt.Fprintf(w.out, "exists:  %s\n", relHome(tokenPath))
 		return token, nil
 	}
 
 	if opts.dryRun {
-		fmt.Fprintf(w.out, "would write: %s\n", relHome(tokenPath))
+		_, _ = fmt.Fprintf(w.out, "would write: %s\n", relHome(tokenPath))
 		return specv1.CapabilityToken{}, nil
 	}
 
@@ -318,7 +318,7 @@ Call intent_create with:
 	content = strings.ReplaceAll(content, "{{TOKEN_FIELD}}", "`capability_token`")
 
 	if _, err := os.Stat(path); err == nil && !force {
-		fmt.Fprintf(w.out, "exists:  %s\n", relHome(path))
+		_, _ = fmt.Fprintf(w.out, "exists:  %s\n", relHome(path))
 		return nil
 	}
 	return w.write(path, []byte(content), 0o644, force)
@@ -329,17 +329,17 @@ Call intent_create with:
 func ensureDaemonBinary(w *bootstrapWriter, root string) (string, error) {
 	binPath := filepath.Join(root, "bin", initServerName)
 	if fi, err := os.Stat(binPath); err == nil && fi.Mode().IsRegular() {
-		fmt.Fprintf(w.out, "exists:  %s\n", relHome(binPath))
+		_, _ = fmt.Fprintf(w.out, "exists:  %s\n", relHome(binPath))
 		return binPath, nil
 	}
 	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
 		return binPath, nil
 	}
 	if w.dry {
-		fmt.Fprintf(w.out, "would build: %s\n", relHome(binPath))
+		_, _ = fmt.Fprintf(w.out, "would build: %s\n", relHome(binPath))
 		return binPath, nil
 	}
-	fmt.Fprintf(w.out, "building %s...\n", relHome(binPath))
+	_, _ = fmt.Fprintf(w.out, "building %s...\n", relHome(binPath))
 	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/meiosisd")
 	cmd.Dir = root
 	cmd.Stdout = w.out
@@ -347,7 +347,7 @@ func ensureDaemonBinary(w *bootstrapWriter, root string) (string, error) {
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("init: build meiosisd: %w (run `make build` to get the binaries)", err)
 	}
-	fmt.Fprintf(w.out, "wrote:   %s\n", relHome(binPath))
+	_, _ = fmt.Fprintf(w.out, "wrote:   %s\n", relHome(binPath))
 	return binPath, nil
 }
 
@@ -359,12 +359,12 @@ func writeIDEMCPConfig(w *bootstrapWriter, opts *initOptions, home, root, binPat
 		if fi, err := os.Stat(ideDir); err == nil && fi.IsDir() {
 			ide = "antigravity"
 		} else {
-			fmt.Fprintf(w.out, "no IDE detected (looked for %s) — rerun with --ide antigravity to register\n", relHome(ideDir))
+			_, _ = fmt.Fprintf(w.out, "no IDE detected (looked for %s) — rerun with --ide antigravity to register\n", relHome(ideDir))
 			return nil
 		}
 	}
 	if ide == "none" {
-		fmt.Fprintln(w.out, "skipping IDE MCP registration (--ide none)")
+		_, _ = fmt.Fprintln(w.out, "skipping IDE MCP registration (--ide none)")
 		return nil
 	}
 	if ide != "antigravity" {
@@ -406,21 +406,21 @@ func writeIDEMCPConfig(w *bootstrapWriter, opts *initOptions, home, root, binPat
 
 func printInitSummary(out io.Writer, dry bool, root, issuer, agent, tokenPath string, token specv1.CapabilityToken) {
 	if dry {
-		fmt.Fprint(out, "\n[init] dry run: nothing was written.\n")
+		_, _ = fmt.Fprint(out, "\n[init] dry run: nothing was written.\n")
 		return
 	}
-	fmt.Fprint(out, "\n[init] done.\n")
-	fmt.Fprintf(out, "  repository : %s\n", relHome(root))
-	fmt.Fprintf(out, "  agent      : %s  (daemon principal, MCP)\n", agent)
-	fmt.Fprintf(out, "  issuer     : %s  (human, signs capability tokens)\n", issuer)
-	fmt.Fprintf(out, "  token      : %s\n", relHome(tokenPath))
+	_, _ = fmt.Fprint(out, "\n[init] done.\n")
+	_, _ = fmt.Fprintf(out, "  repository : %s\n", relHome(root))
+	_, _ = fmt.Fprintf(out, "  agent      : %s  (daemon principal, MCP)\n", agent)
+	_, _ = fmt.Fprintf(out, "  issuer     : %s  (human, signs capability tokens)\n", issuer)
+	_, _ = fmt.Fprintf(out, "  token      : %s\n", relHome(tokenPath))
 	if !token.ExpiresAt.IsZero() {
-		fmt.Fprintf(out, "  token ttl  : expires %s\n", token.ExpiresAt.Format(time.RFC3339))
+		_, _ = fmt.Fprintf(out, "  token ttl  : expires %s\n", token.ExpiresAt.Format(time.RFC3339))
 	}
-	fmt.Fprint(out, "\nOpen this repository in the Antigravity IDE: the meiosisd server and its\n")
-	fmt.Fprintf(out, "three tools (intent_create, intent_check_path, evidence_submit) will be\navailable. Approve them when prompted, then try:\n")
-	fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
-	fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
+	_, _ = fmt.Fprint(out, "\nOpen this repository in the Antigravity IDE: the meiosisd server and its\n")
+	_, _ = fmt.Fprintf(out, "three tools (intent_create, intent_check_path, evidence_submit) will be\navailable. Approve them when prompted, then try:\n")
+	_, _ = fmt.Fprint(out, "  \"declare an intent to refactor the Button component, then check whether\n")
+	_, _ = fmt.Fprint(out, "   pkg/auth/login.go is inside its scope\"\n")
 }
 
 func defaultHumanName() (string, error) {
