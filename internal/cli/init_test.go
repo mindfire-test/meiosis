@@ -173,6 +173,32 @@ func TestInitWritesVSCodeMCPConfig(t *testing.T) {
 	}
 }
 
+func TestInitWritesMultipleIDEMCPConfigs(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(bin) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bin", initServerName), []byte("#!/bin/sh\nexit 0"), 0o755); err != nil {
+		t.Fatalf("WriteFile(bin/meiosisd) error = %v", err)
+	}
+	execute(t, "init", "--repo", root, "--ide", "vscode,antigravity")
+
+	if _, err := os.Stat(filepath.Join(root, ".vscode", "mcp.json")); err != nil {
+		t.Fatalf("init did not create .vscode/mcp.json: %v", err)
+	}
+	agConfig := filepath.Join(homeDir(), ".gemini", "antigravity", "mcp_config.json")
+	if _, err := os.Stat(agConfig); err != nil {
+		t.Fatalf("init did not create %s: %v", agConfig, err)
+	}
+	if got := mustRead(t, filepath.Join(root, ".vscode", "mcp.json")); !strings.Contains(got, filepath.Join(root, "bin", initServerName)) {
+		t.Fatalf("mcp.json should point at local %s, got: %s", filepath.Join(root, "bin", initServerName), got)
+	}
+	if got := mustRead(t, agConfig); !strings.Contains(got, filepath.Join(root, "bin", initServerName)) {
+		t.Fatalf("mcp_config.json should point at local %s, got: %s", filepath.Join(root, "bin", initServerName), got)
+	}
+}
+
 func TestInitWritesAGentsMDPointers(t *testing.T) {
 	root := initRepo(t)
 	execute(t, "init", "--repo", root, "--ide", "none")
