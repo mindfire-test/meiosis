@@ -333,7 +333,16 @@ func ensureDaemonBinary(w *bootstrapWriter, root string) (string, error) {
 		return binPath, nil
 	}
 	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
-		return binPath, nil
+		if resolved, err := exec.LookPath(initServerName); err == nil {
+			abs, err := filepath.Abs(resolved)
+			if err != nil {
+				abs = resolved
+			}
+			_, _ = fmt.Fprintf(w.out, "using:   %s (installed binary)\n", relHome(abs))
+			return abs, nil
+		}
+		return "", fmt.Errorf("init: %s not found in %s or on PATH — run `make install` before init in a non-Go directory",
+			initServerName, relHome(filepath.Join(root, "bin")))
 	}
 	if w.dry {
 		_, _ = fmt.Fprintf(w.out, "would build: %s\n", relHome(binPath))

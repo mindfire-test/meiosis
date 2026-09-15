@@ -144,6 +144,12 @@ func TestInitSkipsUnsupportedIDE(t *testing.T) {
 
 func TestInitWritesVSCodeMCPConfig(t *testing.T) {
 	root := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(bin) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bin", initServerName), []byte("#!/bin/sh\nexit 0"), 0o755); err != nil {
+		t.Fatalf("WriteFile(bin/meiosisd) error = %v", err)
+	}
 	execute(t, "init", "--repo", root, "--ide", "vscode")
 
 	if _, err := os.Stat(filepath.Join(root, ".vscode", "mcp.json")); err != nil {
@@ -161,6 +167,9 @@ func TestInitWritesVSCodeMCPConfig(t *testing.T) {
 		if !strings.Contains(raw, want) {
 			t.Fatalf("mcp.json missing %q: %s", want, raw)
 		}
+	}
+	if want := filepath.Join(root, "bin", initServerName); !strings.Contains(raw, want) {
+		t.Fatalf("mcp.json command should point at local %s, got: %s", want, raw)
 	}
 }
 
