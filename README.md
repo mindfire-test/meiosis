@@ -40,11 +40,20 @@ meiosis attaches it to a content hash.
 
 ### Prebuilt binaries
 
-Quick install (Linux/macOS, detects your OS/arch automatically — installs
-`mei` and `meiosisd` into `/usr/local/bin`, or `~/.local/bin` if not writable):
+Quick install (detects your OS/arch automatically — installs `mei` and
+`meiosisd` into `/usr/local/bin` on Linux/macOS, `%LOCALAPPDATA%\mei` on
+Windows):
+
+**Linux/macOS:**
 
 ```sh
 curl -fsSL https://github.com/subhranshus-mindfire/meiosis/releases/latest/download/install.sh | bash
+```
+
+**Windows (PowerShell, no bash needed):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://github.com/subhranshus-mindfire/meiosis/releases/latest/download/install.ps1 | iex"
 ```
 
 Or download the archive for your platform from the
@@ -68,7 +77,9 @@ mei version
 ```
 
 Optionally verify the download against `SHA256SUMS.txt` from the same release.
-On Windows, unpack the zip and add the folder to your `PATH`.
+
+The Windows installer also adds `mei.exe` to your user PATH — open a new
+terminal after it finishes.
 
 ### From source
 
@@ -82,15 +93,19 @@ export PATH="$PWD/bin:$PATH"
 ### First run
 
 In any repository you want to govern, `mei init` bootstraps everything —
-identity keys, a 30-day capability token, agent instructions, and (with the
-Antigravity IDE) the meiosisd MCP server:
+identity keys, a 30-day capability token, agent instructions, and MCP server
+registration. It picks up VS Code (`.vscode/mcp.json`), Antigravity
+(`~/.gemini/antigravity/mcp_config.json`), or both:
 
 ```sh
 cd <your-project>
-mei init
+mei init                       # auto-detect IDE
+mei init --ide vscode          # register with VS Code only
+mei init --ide antigravity     # register with Antigravity only
+mei init --ide vscode,antigravity   # both
 ```
 
-Open the project in Antigravity, approve the `meiosisd` server, and ask the
+Open the project in your IDE, approve the `meiosisd` server, and ask the
 agent to declare an intent. `mei init` is idempotent; rerun it to repair a
 partial setup, or `mei init --force` to regenerate secrets.
 

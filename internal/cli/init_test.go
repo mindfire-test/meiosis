@@ -136,9 +136,66 @@ func TestInitSkipsUnsupportedIDE(t *testing.T) {
 	var output strings.Builder
 	command.SetOut(&output)
 	command.SetErr(&output)
-	command.SetArgs([]string{"init", "--repo", root, "--ide", "vscode"})
+	command.SetArgs([]string{"init", "--repo", root, "--ide", "intellij"})
 	if err := command.Execute(); err == nil {
 		t.Fatal("Execute() expected an error for an unsupported IDE")
+	}
+}
+
+func TestInitWritesVSCodeMCPConfig(t *testing.T) {
+	root := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(bin) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bin", initServerName), []byte("#!/bin/sh\nexit 0"), 0o755); err != nil {
+		t.Fatalf("WriteFile(bin/meiosisd) error = %v", err)
+	}
+	execute(t, "init", "--repo", root, "--ide", "vscode")
+
+	if _, err := os.Stat(filepath.Join(root, ".vscode", "mcp.json")); err != nil {
+		t.Fatalf("init did not create .vscode/mcp.json: %v", err)
+	}
+
+	raw := mustRead(t, filepath.Join(root, ".vscode", "mcp.json"))
+	for _, want := range []string{
+		`"meiosisd"`,
+		`"type": "stdio"`,
+		`"-principal"`,
+		`"-db"`,
+		".meiosis/meiosisd.db",
+	} {
+		if !strings.Contains(raw, want) {
+			t.Fatalf("mcp.json missing %q: %s", want, raw)
+		}
+	}
+	if want := filepath.Join(root, "bin", initServerName); !strings.Contains(raw, want) {
+		t.Fatalf("mcp.json command should point at local %s, got: %s", want, raw)
+	}
+}
+
+func TestInitWritesMultipleIDEMCPConfigs(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(root, "bin"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(bin) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bin", initServerName), []byte("#!/bin/sh\nexit 0"), 0o755); err != nil {
+		t.Fatalf("WriteFile(bin/meiosisd) error = %v", err)
+	}
+	execute(t, "init", "--repo", root, "--ide", "vscode,antigravity")
+
+	if _, err := os.Stat(filepath.Join(root, ".vscode", "mcp.json")); err != nil {
+		t.Fatalf("init did not create .vscode/mcp.json: %v", err)
+	}
+	agConfig := filepath.Join(homeDir(), ".gemini", "antigravity", "mcp_config.json")
+	if _, err := os.Stat(agConfig); err != nil {
+		t.Fatalf("init did not create %s: %v", agConfig, err)
+	}
+	if got := mustRead(t, filepath.Join(root, ".vscode", "mcp.json")); !strings.Contains(got, filepath.Join(root, "bin", initServerName)) {
+		t.Fatalf("mcp.json should point at local %s, got: %s", filepath.Join(root, "bin", initServerName), got)
+	}
+	if got := mustRead(t, agConfig); !strings.Contains(got, filepath.Join(root, "bin", initServerName)) {
+		t.Fatalf("mcp_config.json should point at local %s, got: %s", filepath.Join(root, "bin", initServerName), got)
 	}
 }
 
