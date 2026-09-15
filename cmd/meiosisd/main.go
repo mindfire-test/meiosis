@@ -1,8 +1,3 @@
-// Command meiosisd is the local MCP daemon (issue #16): it serves
-// intent_create, intent_check_path and evidence_submit as MCP tools over
-// stdio and, optionally, a local UNIX socket. It is intentionally a thin
-// wrapper — internal/mcp owns the protocol, internal/graph owns persistence
-// — mirroring cmd/mei's own "thin entrypoint" style.
 package main
 
 import (
@@ -97,6 +92,13 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 // each one with the same JSON-RPC loop stdio uses — this is what satisfies
 // the "listens cleanly over stdio or local socket" acceptance criterion
 // without a second protocol implementation.
+//
+// ctx cancellation only interrupts a Server.Serve loop between scanned
+// lines: a per-connection goroutine blocked reading from an idle conn won't
+// notice ctx.Done() on its own. So beyond closing the listener, every
+// accepted conn is tracked and force-closed on shutdown too — that unblocks
+// its pending Read() and lets Serve return promptly instead of leaving the
+// goroutine parked on a connection nobody will ever write to again.
 func serveSocket(ctx context.Context, server *mcp.Server, path string) error {
 	_ = os.Remove(path) // best-effort: clear a stale socket left by a prior run
 	listener, err := net.Listen("unix", path)
@@ -105,9 +107,12 @@ func serveSocket(ctx context.Context, server *mcp.Server, path string) error {
 	}
 	defer func() { _ = listener.Close() }()
 
+	conns := &connSet{conns: make(map[net.Conn]struct{})}
+
 	go func() {
 		<-ctx.Done()
 		_ = listener.Close()
+		conns.closeAll()
 	}()
 
 	for {
@@ -120,7 +125,9 @@ func serveSocket(ctx context.Context, server *mcp.Server, path string) error {
 				return err
 			}
 		}
+		conns.add(conn)
 		go func() {
+			defer conns.remove(conn)
 			defer func() { _ = conn.Close() }()
 			_ = server.Serve(ctx, conn, conn)
 		}()
