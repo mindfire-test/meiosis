@@ -56,15 +56,17 @@ else
 fi
 
 say "platform: ${goos}/${goarch}, version: ${version}"
-say "downloading ${archive} from ${repo} (this can take a moment)..."
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-if [ -n "${MEI_SHOW_PROGRESS:-}" ]; then
-	say "downloading ${archive}..."
-	curl -L --fail --retry 3 --retry-delay 2 -o "$tmp/$archive" "${base}/${archive}"
+if [ -t 1 ] && [ -z "${MEI_QUIET:-}" ]; then
+	say "downloading ${archive} from ${repo} (this can take a moment)..."
+	curl -fL --retry 3 --retry-delay 2 --speed-time 30 --speed-limit 1024 \
+		--progress-bar -o "$tmp/$archive" "${base}/${archive}"
 else
-	curl -fsSL --retry 3 --retry-delay 2 -o "$tmp/$archive" "${base}/${archive}"
+	say "downloading ${archive} from ${repo} (this can take a moment)..."
+	curl -fsSL --retry 3 --retry-delay 2 --speed-time 30 --speed-limit 1024 \
+		-o "$tmp/$archive" "${base}/${archive}"
 fi
 curl -fsSL --retry 3 --retry-delay 2 -o "$tmp/SHA256SUMS.txt" "${base}/SHA256SUMS.txt"
 if command -v sha256sum >/dev/null 2>&1; then
