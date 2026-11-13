@@ -155,13 +155,20 @@ type SubmitEvidenceParams struct {
 // The attempt check, independence computation and write happen in one
 // transaction (FR-4.1, FR-4.4).
 func (s *Store) SubmitEvidence(ctx context.Context, p SubmitEvidenceParams, signerKey ed25519.PrivateKey) (specv1.Evidence, error) {
+	// Every submit path (MCP evidence_submit and evidence_ingest, mei evidence
+	// submit) ends here, so this is the one place footprints are checked. It
+	// runs before signing: the signed bytes carry the normalised footprint.
+	footprint, fpErr := specv1.ParseFootprint(p.Footprint)
+	if fpErr != nil {
+		return specv1.Evidence{}, fmt.Errorf("%w: %w", ErrInvalidParams, fpErr)
+	}
 	evidence := specv1.Evidence{
 		Attempt:    p.Attempt,
 		World:      p.World,
 		Kind:       p.Kind,
 		Producer:   p.Producer,
 		Outcome:    p.Outcome,
-		Footprint:  p.Footprint,
+		Footprint:  footprint,
 		Payload:    p.Payload,
 		ExpiresAt:  p.ExpiresAt,
 		Supersedes: p.Supersedes,
