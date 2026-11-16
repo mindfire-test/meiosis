@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -27,6 +28,7 @@ func newEvidenceSubmitCommand(settings *Settings) *cobra.Command {
 		footprint  []string
 		supersedes string
 		minLine    float64
+		ttl        time.Duration
 		payload    string
 		outcome    string
 	)
@@ -47,10 +49,17 @@ an agent's attempt. Use --key and --producer to sign as another principal, such
 as a CI runner.
 
 A coverage report is a measurement: without --min-line-coverage it is recorded as
-inconclusive, so a pass is never implied without a stated bar.`,
+inconclusive, so a pass is never implied without a stated bar.
+
+Footprint: the evidence depends on the paths given with --footprint plus, for
+Cobertura, LCOV and SARIF reports, the files the report covers, when every one of
+them is a file of the bound world. Otherwise the report adds nothing, and with no
+--footprint either the evidence depends on the whole world. --ttl makes the
+evidence expire after the given duration, whatever the code does.`,
 		Example: "  mei evidence submit --attempt att_abc --from junit.xml\n" +
 			"  go test -json ./... | mei evidence submit --attempt att_abc --from -\n" +
-			"  mei evidence submit --attempt att_abc --from cover.xml --min-line-coverage 80",
+			"  mei evidence submit --attempt att_abc --from cover.xml --min-line-coverage 80\n" +
+			"  mei evidence submit --attempt att_abc --from junit.xml --footprint 'internal/auth/**' --ttl 72h",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			raw := payload != ""
@@ -63,6 +72,12 @@ inconclusive, so a pass is never implied without a stated bar.`,
 				return errors.New("--from is required: a report file, or - for standard input (or --payload to supply the result yourself)")
 			case !raw && outcome != "":
 				return errors.New("--outcome is only for --payload; a report's outcome comes from the report")
+			case cmd.Flags().Changed("ttl") && ttl < time.Second:
+				return errors.New("--ttl must be at least 1s")
+			}
+			var expiresAt time.Time
+			if cmd.Flags().Changed("ttl") {
+				expiresAt = time.Now().UTC().Add(ttl)
 			}
 			source := from
 			if raw {
@@ -99,6 +114,7 @@ inconclusive, so a pass is never implied without a stated bar.`,
 			}
 			defer h.close()
 			ctx := context.Background()
+			opts.RepoRoot = h.root
 
 			attempts, err := h.store.ListAttempts(ctx, "")
 			if err != nil {
@@ -128,7 +144,7 @@ inconclusive, so a pass is never implied without a stated bar.`,
 			if raw {
 				record, subErr := h.store.SubmitEvidence(ctx, graph.SubmitEvidenceParams{
 					Attempt: attempt.ID, Producer: h.name, World: world, Kind: specv1.EvidenceKind(kind),
-					Outcome: specv1.EvidenceOutcome(outcome), Payload: report, Footprint: footprint, Supersedes: supersedesID,
+					Outcome: specv1.EvidenceOutcome(outcome), Payload: report, Footprint: footprint, ExpiresAt: expiresAt, Supersedes: supersedesID,
 				}, h.keys.PrivateKey)
 				if subErr != nil {
 					return subErr
@@ -137,7 +153,7 @@ inconclusive, so a pass is never implied without a stated bar.`,
 			}
 			record, parsed, err := evidence.Ingest(ctx, h.store, evidence.IngestParams{
 				Attempt: attempt.ID, Producer: h.name, World: world, Format: fmtName,
-				Options: opts, Footprint: footprint, Supersedes: supersedesID,
+				Options: opts, Footprint: footprint, Supersedes: supersedesID, ExpiresAt: expiresAt,
 			}, h.keys.PrivateKey, report)
 			if err != nil {
 				return err
@@ -153,7 +169,8 @@ inconclusive, so a pass is never implied without a stated bar.`,
 	flags.StringVar(&payload, "payload", "", "JSON file (or - for stdin) holding the evidence payload; use with --kind and --outcome")
 	flags.StringVar(&outcome, "outcome", "", "pass, fail or inconclusive (with --payload only)")
 	flags.StringVar(&worldHex, "world", "", "world hash the report was produced against (default: the attempt's current world)")
-	flags.StringArrayVar(&footprint, "footprint", nil, "path the evidence depends on (repeatable)")
+	flags.StringArrayVar(&footprint, "footprint", nil, "path or glob the evidence depends on (repeatable); coverage and SARIF reports add the files they cover")
+	flags.DurationVar(&ttl, "ttl", 0, "expire the evidence after this long (e.g. 72h), whatever the code does")
 	flags.StringVar(&supersedes, "supersedes", "", "ID or prefix of an earlier record of yours on this attempt that this one corrects")
 	flags.Float64Var(&minLine, "min-line-coverage", 0, "coverage reports: percent of lines required to pass")
 	flags.StringVar(&f.createdBy, "producer", "", "principal the evidence is signed as (default: human:<username>)")
@@ -226,9 +243,27 @@ func renderSubmitted(cmd *cobra.Command, settings *Settings, record specv1.Evide
 	if record.Supersedes != "" {
 		extra = ", supersedes " + shortID(record.Supersedes)
 	}
-	_, err := fmt.Fprintf(cmd.OutOrStdout(), "evidence %s recorded: %s %s (from %s) by %s, %s%s\n  bound to world %s\n",
-		record.ID, record.Kind, record.Outcome, parsed.Format, record.Producer, independence, extra, record.World.Short())
-	return err
+	out := cmd.OutOrStdout()
+	if _, err := fmt.Fprintf(out, "evidence %s recorded: %s %s (from %s) by %s, %s%s\n  bound to world %s\n",
+		record.ID, record.Kind, record.Outcome, parsed.Format, record.Producer, independence, extra, record.World.Short()); err != nil {
+		return err
+	}
+	footprint := "the whole world"
+	if n := len(record.Footprint); n > 0 {
+		footprint = fmt.Sprintf("%d path(s)", n)
+		if len(parsed.Footprint) > 0 {
+			footprint += ", including the files the report covers"
+		}
+	}
+	if _, err := fmt.Fprintf(out, "  depends on %s\n", footprint); err != nil {
+		return err
+	}
+	if !record.ExpiresAt.IsZero() {
+		if _, err := fmt.Fprintf(out, "  expires %s\n", record.ExpiresAt.Format(time.RFC3339)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func newEvidenceKindCommand(settings *Settings) *cobra.Command {

@@ -96,6 +96,11 @@ type Options struct {
 	// measurement, recorded as inconclusive, so a pass is never implied
 	// without a stated bar.
 	MinLineCoverage *float64
+	// RepoRoot is the repository's absolute path. Reports often name files by
+	// absolute path; RepoRoot turns those into repository paths for the
+	// footprint. Without it, a report that names files absolutely gives no
+	// footprint.
+	RepoRoot string
 }
 
 // Report is the result of parsing one report.
@@ -104,6 +109,12 @@ type Report struct {
 	Kind    specv1.EvidenceKind
 	Outcome specv1.EvidenceOutcome
 	Payload json.RawMessage
+	// Footprint is the files the report covers, as repository paths: the
+	// measured files of a coverage report, the analysed files of a SARIF log.
+	// It is nil when the report does not name every file it covers in a form
+	// that maps onto the repository, so a footprint is never smaller than the
+	// truth.
+	Footprint []string
 }
 
 // Parse reads data as the given format.
@@ -123,6 +134,7 @@ func Parse(format Format, data []byte, opts Options) (Report, error) {
 	var (
 		outcome specv1.EvidenceOutcome
 		payload any
+		files   []string // file names the report covers, nil if it cannot list them all
 		err     error
 	)
 	switch format {
@@ -131,11 +143,11 @@ func Parse(format Format, data []byte, opts Options) (Report, error) {
 	case FormatJUnit:
 		outcome, payload, err = parseJUnit(data)
 	case FormatSARIF:
-		outcome, payload, err = parseSARIF(data)
+		outcome, payload, files, err = parseSARIF(data)
 	case FormatCobertura:
-		outcome, payload, err = parseCobertura(data, opts)
+		outcome, payload, files, err = parseCobertura(data, opts)
 	case FormatLCOV:
-		outcome, payload, err = parseLCOV(data, opts)
+		outcome, payload, files, err = parseLCOV(data, opts)
 	case FormatCycloneDX:
 		outcome, payload, err = parseCycloneDX(data)
 	default:
@@ -148,7 +160,7 @@ func Parse(format Format, data []byte, opts Options) (Report, error) {
 	if err != nil {
 		return Report{}, fmt.Errorf("evidence: encode payload: %w", err)
 	}
-	return Report{Format: format, Kind: kind, Outcome: outcome, Payload: encoded}, nil
+	return Report{Format: format, Kind: kind, Outcome: outcome, Payload: encoded, Footprint: resolveFootprint(files, opts.RepoRoot)}, nil
 }
 
 // ReadReport reads at most MaxReportBytes from r.

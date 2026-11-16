@@ -198,3 +198,28 @@ func TestEvidenceSubmitPayloadForCustomAndHumanReviewKinds(t *testing.T) {
 		t.Fatal("a custom kind without the x- prefix was registered")
 	}
 }
+
+func TestEvidenceSubmitFootprintFromReportAndTTL(t *testing.T) {
+	root, _ := seededRepo(t)
+
+	report := filepath.Join(t.TempDir(), "lcov.info")
+	if err := os.WriteFile(report, []byte("SF:"+filepath.Join(root, "src", "a.go")+"\nDA:1,1\nend_of_record\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ev := submitted(t, root, "--from", report, "--ttl", "72h")
+	if fp, _ := ev["footprint"].([]any); len(fp) != 1 || fp[0] != "src/a.go" {
+		t.Fatalf("footprint = %v, want [src/a.go]", ev["footprint"])
+	}
+	if ev["expires_at"] == nil {
+		t.Fatalf("--ttl did not set expires_at: %v", ev)
+	}
+
+	text := mustRun(t, "", "evidence", "submit", "--repo", root, "--producer", "human:lakin", "--from", testdata+"lcov.info")
+	if !strings.Contains(text, "depends on the whole world") {
+		t.Fatalf("output = %s", text)
+	}
+
+	if out, err := run("", "evidence", "submit", "--repo", root, "--producer", "human:lakin", "--from", report, "--ttl", "0s"); err == nil {
+		t.Fatalf("--ttl 0s was accepted: %s", out)
+	}
+}

@@ -54,6 +54,15 @@ func (s *Store) Manifest(ctx context.Context, attemptID string) (map[string]stri
 	return manifest, nil
 }
 
+// WorldFiles returns the files of a committed world: path to blob ID. It
+// returns ErrUnknownWorld when no manifest is stored for the world.
+func (s *Store) WorldFiles(ctx context.Context, world specv1.WorldHash) (map[string]string, error) {
+	if world == EmptyWorld() {
+		return map[string]string{}, nil
+	}
+	return loadManifest(ctx, s.backend, world)
+}
+
 // baseManifest returns a private copy of an attempt's base world's files.
 func (s *Store) baseManifest(ctx context.Context, attempt specv1.Attempt) (map[string]string, error) {
 	out := map[string]string{}
