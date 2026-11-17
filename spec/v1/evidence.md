@@ -56,6 +56,8 @@ The reference implementation turns reports that verification tools already produ
 - **CycloneDX:** `fail` if any vulnerability's worst rating is `high` or `critical`; `inconclusive` if the BOM carries no `vulnerabilities` section, since an inventory alone does not show the absence of known vulnerabilities; otherwise `pass`.
 Reports are limited to 32 MiB; XML nested more than 64 levels is rejected.
 
+**Footprints from reports (FR-4.6):** a Cobertura or LCOV report contributes the files it measured, and a SARIF log the files it analysed (every run's `artifacts`, plus the files its results point at). The files a SARIF log reports results for are not enough on their own, since a clean scan has none, so a log in which any run lists no artifacts contributes nothing. These files are added to any footprint the submitter supplies, all or nothing: they are used only if every one of them maps onto a clean repository path, no more than 1,000 remain, and each exists in the world the evidence is bound to. Otherwise the report contributes nothing and, with no submitted footprint either, the evidence depends on the whole world. A footprint taken from a report is therefore never smaller than the set of files the report names.
+
 ## Validation Rules & Relationships
 1. **Independence (FR-4.4):** A core Meiosis property is that an agent cannot grade its own homework. Independence is dynamically computed as: `independent = (Evidence.producer != Attempt.author)`. Policy can mandate independent evidence.
    Because `independent` is part of the signed record, it cannot be altered after the fact. The `producer` is the authenticated principal that signed the record; a server MUST NOT accept a `producer` other than the submitting principal.

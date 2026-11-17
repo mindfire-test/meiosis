@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -77,7 +78,9 @@ type coberturaRoot struct {
 	LinesCovered  string `xml:"lines-covered,attr"`
 	BranchesValid string `xml:"branches-valid,attr"`
 	BranchesCov   string `xml:"branches-covered,attr"`
-	Packages      []struct {
+	// Sources are the directories class filenames are relative to.
+	Sources  []string `xml:"sources>source"`
+	Packages []struct {
 		Classes []struct {
 			Filename string          `xml:"filename,attr"`
 			Lines    []coberturaLine `xml:"lines>line"`
@@ -88,19 +91,19 @@ type coberturaRoot struct {
 	} `xml:"packages>package"`
 }
 
-func parseCobertura(data []byte, opts Options) (specv1.EvidenceOutcome, any, error) {
+func parseCobertura(data []byte, opts Options) (specv1.EvidenceOutcome, any, []string, error) {
 	if err := validThreshold(opts); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if err := checkXMLDepth(data); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	var root coberturaRoot
 	if err := xml.Unmarshal(data, &root); err != nil {
-		return "", nil, fmt.Errorf("%w: not a Cobertura report: %w", ErrUnsupported, err)
+		return "", nil, nil, fmt.Errorf("%w: not a Cobertura report: %w", ErrUnsupported, err)
 	}
 	if root.XMLName.Local != "coverage" {
-		return "", nil, fmt.Errorf("%w: not a Cobertura report: root element is <%s>", ErrUnsupported, root.XMLName.Local)
+		return "", nil, nil, fmt.Errorf("%w: not a Cobertura report: root element is <%s>", ErrUnsupported, root.XMLName.Local)
 	}
 
 	// Count the line elements themselves: the attributes on the root are
@@ -136,10 +139,29 @@ func parseCobertura(data []byte, opts Options) (specv1.EvidenceOutcome, any, err
 		c.branchesCovered = atoiOrZero(root.BranchesCov)
 	}
 	if err := c.consistent("Cobertura"); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	outcome, payload := c.payload("cobertura", opts)
-	return outcome, payload, nil
+	return outcome, payload, coberturaFiles(root, filesSeen), nil
+}
+
+func coberturaFiles(root coberturaRoot, filenames map[string]bool) []string {
+	if len(root.Sources) > 1 {
+		return nil
+	}
+	source := ""
+	if len(root.Sources) == 1 {
+		source = strings.ReplaceAll(strings.TrimSpace(root.Sources[0]), `\`, "/")
+	}
+	files := make([]string, 0, len(filenames))
+	for name := range filenames {
+		name = strings.ReplaceAll(name, `\`, "/")
+		if source != "" && !path.IsAbs(name) {
+			name = path.Join(source, name)
+		}
+		files = append(files, name)
+	}
+	return files
 }
 
 // parseCondition reads Cobertura's "75% (3/4)" condition-coverage attribute.
@@ -168,14 +190,15 @@ func atoiOrZero(s string) int {
 	return n
 }
 
-func parseLCOV(data []byte, opts Options) (specv1.EvidenceOutcome, any, error) {
+func parseLCOV(data []byte, opts Options) (specv1.EvidenceOutcome, any, []string, error) {
 	if err := validThreshold(opts); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))))
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 
 	var c coverageTotals
+	var files []string
 	var (
 		inRecord                     bool
 		daValid, daCovered           int
@@ -207,14 +230,15 @@ func parseLCOV(data []byte, opts Options) (specv1.EvidenceOutcome, any, error) {
 			flush()
 			inRecord = true
 			c.files++
+			files = append(files, strings.TrimSpace(line[3:]))
 		case strings.HasPrefix(line, "DA:"):
 			parts := strings.Split(line[3:], ",")
 			if len(parts) < 2 {
-				return "", nil, fmt.Errorf("%w: malformed LCOV line %q", ErrUnsupported, truncate(line, 80))
+				return "", nil, nil, fmt.Errorf("%w: malformed LCOV line %q", ErrUnsupported, truncate(line, 80))
 			}
 			hits, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64)
 			if err != nil {
-				return "", nil, fmt.Errorf("%w: malformed LCOV line %q", ErrUnsupported, truncate(line, 80))
+				return "", nil, nil, fmt.Errorf("%w: malformed LCOV line %q", ErrUnsupported, truncate(line, 80))
 			}
 			daValid++
 			if hits > 0 {
@@ -233,15 +257,15 @@ func parseLCOV(data []byte, opts Options) (specv1.EvidenceOutcome, any, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return "", nil, fmt.Errorf("%w: read LCOV: %w", ErrUnsupported, err)
+		return "", nil, nil, fmt.Errorf("%w: read LCOV: %w", ErrUnsupported, err)
 	}
 	flush()
 	if c.files == 0 {
-		return "", nil, fmt.Errorf("%w: not an LCOV report: no SF: records", ErrUnsupported)
+		return "", nil, nil, fmt.Errorf("%w: not an LCOV report: no SF: records", ErrUnsupported)
 	}
 	if err := c.consistent("LCOV"); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	outcome, payload := c.payload("lcov", opts)
-	return outcome, payload, nil
+	return outcome, payload, files, nil
 }
